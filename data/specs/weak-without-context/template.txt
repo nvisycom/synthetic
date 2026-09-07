@@ -1,0 +1,13 @@
+Inventory reconciliation notes, warehouse 12.
+
+The bracket {{bracket}} identifies the replacement part in the catalog.
+Batch {{batch}} shipped from the east dock on Tuesday afternoon.
+The lot was tagged {{lot}} during the quarterly audit.
+The discontinued variant is unit {{unit}} in the parts list.
+
+These are catalog numbers, batch ids, lot tags, and part codes. None of them
+identifies a person or an account, and no keyword nearby suggests otherwise.
+A pipeline that redacts them has damaged an operations document for nothing.
+
+Questions about this reconciliation go to {{real}}, which is a real address
+and should be redacted.

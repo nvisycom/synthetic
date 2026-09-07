@@ -1,0 +1,52 @@
+[project]
+name = "synthetic-notebooks"
+version = "0.1.0"
+description = "Interactive exploration of a benchmark run against its ground truth"
+requires-python = ">=3.13"
+dependencies = [
+    "marimo>=0.24.0",
+    "polars>=1.44.0",
+    "altair>=6.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "nbformat>=5.11.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.0",
+    # Astral's type checker. Pre-1.0, so the floor is loose on purpose: it is
+    # here to catch mistakes, not to gate a notebook on a tool still moving.
+    "ty>=0.0.78",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",   # pycodestyle, pyflakes
+    "I",             # import sorting
+    "N",             # naming
+    "UP",            # pyupgrade
+    "B",             # bugbear
+    "SIM",           # simplify
+    "RUF",           # ruff's own
+]
+
+[tool.ruff.lint.per-file-ignores]
+# A bare expression at the end of a marimo cell is that cell's output, not a
+# mistake, and a cell's arguments are injected by the runtime rather than used
+# in the body.
+# N803: a cell's arguments are named for the variables they receive, so a
+# class like `Path` keeps its own name.
+"*.py" = ["B018", "N803"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ty.rules]
+# A marimo notebook's cells are functions whose arguments are injected by the
+# runtime, so an unresolved reference between cells is expected rather than a
+# fault.
+unresolved-reference = "ignore"

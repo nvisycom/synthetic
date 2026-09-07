@@ -1,0 +1,218 @@
+/**
+ * @fileoverview Corpus generation.
+ *
+ * @module generator/generate
+ */
+
+import {
+	mkdir,
+	readdir,
+	readFile,
+	rename,
+	rm,
+	writeFile,
+} from "node:fs/promises";
+import { join } from "node:path";
+import { version } from "#/config.ts";
+import type { Label } from "#/datatypes/label.ts";
+import { LABEL_IDS } from "#/datatypes/label.ts";
+import type { Manifest, RecordEntry } from "#/datatypes/record.ts";
+import { logger } from "#/logger.ts";
+import { recordPath } from "#/manifest/layout.ts";
+import { writeManifest, writeRecord } from "#/manifest/write.ts";
+import { Random } from "#/random.ts";
+import { GeneratorError, generateRecord, validateSpec } from "./record.ts";
+import { loaderFor, templateFilename } from "./render/load.ts";
+import { parseSpec } from "./spec.schema.ts";
+import type { LoadedSpec } from "./spec.ts";
+
+/**
+ * Options accepted by {@link runGenerate}.
+ */
+export interface GenerateOptions {
+	/** Directory of tracked corpus specifications to build from. */
+	data: string;
+	/** Directory to render the corpus into. */
+	out: string;
+	/** Seed making the corpus reproducible. */
+	seed: string;
+	/** Number of records to generate. */
+	records: string;
+}
+
+/**
+ * Loads every spec in a data directory, in a stable order.
+ *
+ * Sorted by filename so the corpus does not depend on directory iteration
+ * order, which varies by filesystem and would break reproducibility across
+ * machines while looking identical on one.
+ */
+async function loadSpecs(dataDir: string): Promise<LoadedSpec[]> {
+	const specsDir = join(dataDir, "specs");
+
+	let dirs: string[];
+	try {
+		dirs = (await readdir(specsDir, { withFileTypes: true }))
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+	} catch {
+		throw new GeneratorError(`No specs directory at ${specsDir}`);
+	}
+
+	if (dirs.length === 0) {
+		throw new GeneratorError(`No specs found in ${specsDir}`);
+	}
+
+	const specs: LoadedSpec[] = [];
+	// Sorted by directory name so the corpus does not depend on filesystem
+	// iteration order, which varies by machine and would break reproducibility
+	// across them while looking identical on one.
+	for (const dir of dirs.sort()) {
+		const specPath = join(specsDir, dir, "spec.json");
+
+		let raw: unknown;
+		try {
+			raw = JSON.parse(await readFile(specPath, "utf8"));
+		} catch (cause) {
+			throw new GeneratorError(
+				`Spec at ${specPath} could not be read: ${(cause as Error).message}`,
+			);
+		}
+
+		// Validated rather than cast: a spec is hand-written, so it is the one
+		// input here most likely to carry a typo, and the error should name the
+		// file that is wrong rather than surface three steps downstream.
+		const spec = parseSpec(raw, specPath);
+
+		// Checked before the template is read: an unsupported format falls back to
+		// `template.txt`, so a missing loader would otherwise be reported as a
+		// missing template and send the author after the wrong thing.
+		const load = loaderFor(spec.format);
+		if (load === undefined) {
+			throw new GeneratorError(
+				`Spec ${JSON.stringify(spec.id)} uses format ${JSON.stringify(spec.format)}, which has no template loader`,
+			);
+		}
+
+		// Each format stores its template in the shape its documents have, so the
+		// filename and the parsing both come from the format.
+		const filename = spec.template ?? templateFilename(spec.format);
+		const templatePath = join(specsDir, dir, filename);
+
+		let contents: string;
+		try {
+			contents = await readFile(templatePath, "utf8");
+		} catch {
+			throw new GeneratorError(
+				`Spec ${JSON.stringify(spec.id)} names a template at ${templatePath}, which does not exist`,
+			);
+		}
+
+		let template: unknown;
+		try {
+			template = load(contents, templatePath);
+		} catch (cause) {
+			throw new GeneratorError((cause as Error).message);
+		}
+
+		const loaded = { spec, template };
+		validateSpec(loaded);
+		specs.push(loaded);
+	}
+
+	return specs;
+}
+
+/**
+ * Generates a synthetic corpus and its ground-truth manifest.
+ */
+export async function runGenerate(options: GenerateOptions): Promise<void> {
+	const seed = Random.parseSeed(options.seed);
+	const count = Number(options.records);
+	if (!Number.isInteger(count) || count < 1) {
+		throw new GeneratorError(
+			`Record count must be a positive integer, got ${JSON.stringify(options.records)}`,
+		);
+	}
+
+	const specs = await loadSpecs(options.data);
+	logger.info("loaded specs", { count: specs.length, from: options.data });
+
+	// Generated into a staging directory and published by a single rename, so a
+	// failure partway through cannot leave a corpus whose manifest and records
+	// come from different runs — which validates cleanly while pairing every
+	// answer key with the wrong artifact.
+	const staging = `${options.out}.staging`;
+	await rm(staging, { recursive: true, force: true });
+
+	try {
+		const root = Random.fromSeed(seed);
+		const entries: RecordEntry[] = [];
+		// Collected as records are built, so the manifest can name the corpus'
+		// label set without a consumer reading every answer key.
+		const labels = new Set<Label>();
+
+		for (let index = 0; index < count; index++) {
+			// Each record draws from its own stream, so changing one record — or the
+			// number of them — leaves every other record byte-identical.
+			const stream = root.fork();
+			const recordSeed = stream.integer(0, Number.MAX_SAFE_INTEGER);
+
+			const loaded = specs[index % specs.length];
+			if (loaded === undefined)
+				throw new GeneratorError("No spec to generate from");
+
+			const id = `rec_${String(index + 1).padStart(4, "0")}`;
+			const { record, artifact } = generateRecord(
+				loaded,
+				id,
+				stream,
+				recordSeed,
+			);
+
+			const path = recordPath(id);
+			await mkdir(join(staging, path), { recursive: true });
+			await writeFile(join(staging, path, record.artifact), artifact, "utf8");
+			await writeRecord(staging, path, record);
+
+			for (const entity of record.entities) labels.add(entity.label);
+
+			entries.push({
+				id,
+				format: record.format,
+				specId: record.specId,
+				path,
+				digest: record.digest,
+			});
+
+			logger.debug("generated record", { id, spec: loaded.spec.id });
+		}
+
+		const manifest: Manifest = {
+			version: 1,
+			seed,
+			generator: version,
+			// Taxonomy order, so two manifests list them identically.
+			labels: LABEL_IDS.filter((label) => labels.has(label)),
+			createdAt: new Date().toISOString(),
+			records: entries,
+		};
+		await writeManifest(staging, manifest);
+
+		// Publish. The previous corpus is replaced only once every record and the
+		// manifest are on disk.
+		await rm(options.out, { recursive: true, force: true });
+		await rename(staging, options.out);
+
+		logger.success("generated corpus", {
+			records: entries.length,
+			seed,
+			out: options.out,
+		});
+	} catch (cause) {
+		// Leave nothing half-written behind for the next run's directory listing
+		// to mistake for corpus content.
+		await rm(staging, { recursive: true, force: true });
+		throw cause;
+	}
+}

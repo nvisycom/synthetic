@@ -13,7 +13,12 @@
 			"!dist",
 			"!docs",
 			"!coverage",
-			"!.claude"
+			"!.claude",
+			"!corpus",
+			"!*.staging",
+			"!runs",
+			"!**/.venv",
+			"!notebooks"
 		]
 	},
 	"formatter": {

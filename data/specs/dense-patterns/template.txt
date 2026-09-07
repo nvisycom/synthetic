@@ -1,0 +1,19 @@
+Contact and credentials dump for the detection bench. Every value below is a
+strong, self-identifying pattern that fires on its own shape.
+
+Email: {{email}}
+Second email: {{second}}
+URL: {{url}}
+IPv4: {{ipv4}}
+IPv6: {{ipv6}}
+MAC: {{mac}}
+IBAN: {{iban}}
+Card: {{card}}
+API key: {{key}}
+Phone: {{phone}}
+
+An address inside a URL: visit https://mail.example.com/u/{{nested}} to
+confirm — the address and the link share bytes.
+
+Back-to-back values with no separator between them:
+{{second}}{{adjacent}} were pasted together by mistake.

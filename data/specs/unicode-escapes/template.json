@@ -1,0 +1,13 @@
+{
+	"customer": "{{customer}}",
+	"billing": {
+		"contact": "{{accented}}",
+		"email": "{{email}}",
+		"iban": "{{iban}}",
+		"note": "Café résumé on file — priced at {{amount}} per unit."
+	},
+	"notes": [
+		"😀 Café corner: reach {{accented}} at {{email}}.",
+		"Do not call {{phone}} before 10:00 — see the file for {{customer}}."
+	]
+}

@@ -26,8 +26,10 @@ The approach is described in
 [Benchmarking on synthetic documents](https://nvisy.com/blog/benchmarking-on-synthetic-documents).
 
 > [!WARNING]
-> **Project scaffolding.** The generator, scorer, and runner are not implemented
-> yet. This repository currently carries tooling and CI only.
+> **Scoring is not implemented.** A corpus can be generated and submitted to a
+> pipeline, and the result explored, but the metrics themselves — recall,
+> precision, boundary accuracy — are still to come. Only text-bearing formats
+> render; PDF, images, and audio are not started.
 
 ## Features
 
@@ -60,6 +62,19 @@ render-job contract, where that ecosystem is markedly stronger. Ground truth is
 never taken on a renderer's word: planted values are verified against the
 artifact actually produced.
 
+## Layout
+
+| Path      | Holds                                                   | Tracked |
+| --------- | ------------------------------------------------------- | ------- |
+| `data/`   | Record specifications and curated adversarial cases     | Yes     |
+| `corpus/` | Rendered documents and their ground-truth manifest      | No      |
+| `runs/`   | Redaction output and scored reports                     | No      |
+
+Only `data/` is source. A corpus is reproducible from it plus a seed, and a
+run from a corpus, so neither is committed — rendered scans and audio reach
+gigabytes. That split is also what pins a benchmark: a score is only
+comparable across runs if the specifications and seed that produced it are.
+
 ## Requirements
 
 - Node.js 24.0.0 or higher
@@ -69,8 +84,30 @@ artifact actually produced.
 
 ```bash
 npm install
-npm start
 ```
+
+Build a corpus from the tracked specifications, then submit it to a pipeline:
+
+```bash
+synthetic generate --seed 42 --out ./corpus
+synthetic bench --corpus ./corpus --out ./runs
+```
+
+The seed is required rather than defaulted, because a score is only meaningful
+alongside the corpus that produced it, and `--seed 42` is the whole record of
+which corpus that was. `bench` takes no seed: it reads the corpus it is given
+and records that corpus' digest, so a run can only ever be compared against
+what it actually ran on.
+
+`bench` provisions its own workspace, policy, and pipeline and deletes them
+afterwards, so a run cannot inherit configuration from a previous one. It uses
+`NVISY_API_TOKEN` when set, and otherwise signs up for a throwaway account.
+Add `--development` to run against a local server.
+
+`score` is declared but not implemented.
+
+Every target has a `make` equivalent — `make generate`, `make bench`,
+`make explore` — and `make help` lists them.
 
 ## Project
 

@@ -1,0 +1,46 @@
+{
+	"version": 1,
+	"id": "weak-without-context",
+	"description": "The precision floor. Every value here is a weak, ambiguous shape with no keyword to vouch for it — a catalog number, a batch id, an aisle label. All must survive un-redacted; flagging one is over-redaction. Paired with context-window, which plants the same shapes beside their keywords.",
+	"format": "txt",
+	"slots": [
+		{
+			"name": "bracket",
+			"label": "bank_account",
+			"value": "000123456789",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "A catalog part number with an account's shape. No nearby keyword, so its score should stay under the threshold."
+		},
+		{
+			"name": "batch",
+			"label": "bank_account",
+			"value": "000987654321",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "A shipping batch id, same shape, same absence of context."
+		},
+		{
+			"name": "lot",
+			"label": "bank_account",
+			"value": "000555000555",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "A warehouse lot tag."
+		},
+		{
+			"name": "unit",
+			"label": "bank_account",
+			"value": "000456000456",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "A parts-list unit code."
+		},
+		{
+			"name": "real",
+			"label": "email_address",
+			"adversarial": "unusual_context",
+			"note": "One genuinely sensitive value among the decoys, so a pipeline that suppresses everything scores no better than one that suppresses nothing."
+		}
+	]
+}

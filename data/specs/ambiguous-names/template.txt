@@ -1,0 +1,41 @@
+SECURITY INCIDENT REPORT
+{{employer}} — Internal Distribution Only
+
+Filed by {{reporter}} under ticket {{ticket}}.
+
+Summary
+-------
+
+On the morning in question {{reporter:abbreviated}} noticed repeated failed
+authentication attempts against the reporting service. The attempts originated
+from {{host}} and continued for roughly forty minutes before the account
+{{account}} was locked automatically.
+
+Review of the gateway logs showed the same source reaching {{endpoint}} with a
+bearer credential, {{token}}, that had been issued for a decommissioned
+integration and never revoked. A second address, {{peer}}, appeared in the same
+window; whether it is related remains open.
+
+The workstation involved, asset {{device}}, has been isolated pending review.
+
+Assessment
+----------
+
+{{analyst}} reviewed the captured traffic and found no evidence that data left
+the environment. An earlier draft of this report attributed the review to
+{{analyst:misspelled}}, which was a transcription error on our part and refers
+to the same person.
+
+Direct losses are estimated at {{loss}}, almost entirely staff time. April is
+also the month our last review fell due, which is how the gap went unnoticed —
+the reminder was filed under the wrong case.
+
+Questions about this report should go to {{contact}}. Note that a previous
+version circulated with the reporter's name misspelled as {{reporter:misspelled}};
+both spellings refer to the same individual.
+
+The underlying weakness is tracked publicly as {{cve}}, and the affected
+service was running build {{buildId}} at the time. Neither identifies a
+person, and redacting either would leave the report unactionable.
+
+Filed: {{reporter}}

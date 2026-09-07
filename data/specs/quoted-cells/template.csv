@@ -1,0 +1,3 @@
+id,name,email,phone,city,postcode,account,card,balance,last_ip,note
+1001,{{customer}},{{email}},{{phone}},{{city}},{{zip}},{{account}},{{card}},{{amount}},{{ip}},Primary contact for the household account.
+1002,{{inverted}},{{email}},{{phone}},{{city}},{{zip}},{{account}},{{card}},{{amount}},{{ip}},Filed as {{inverted}}; prefers written correspondence.

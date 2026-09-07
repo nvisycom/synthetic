@@ -14,6 +14,9 @@ on:
       - "tsdown.config.ts"
       - "biome.json"
       - "vitest.config.ts"
+      - "vitest.e2e.config.ts"
+      - "test/**"
+      - "data/**"
       - ".github/workflows/build.yml"
   pull_request:
     paths:
@@ -25,6 +28,9 @@ on:
       - "tsdown.config.ts"
       - "biome.json"
       - "vitest.config.ts"
+      - "vitest.e2e.config.ts"
+      - "test/**"
+      - "data/**"
       - ".github/workflows/build.yml"
   workflow_dispatch:
 
@@ -80,6 +86,11 @@ jobs:
 
       - name: Run tests
         run: npm run test:coverage
+
+      # Runs the CLI against the repository's own specs, which is the only way
+      # to catch a spec that is broken rather than code that is.
+      - name: Run end-to-end tests
+        run: npm run test:e2e
 
   build:
     name: Build

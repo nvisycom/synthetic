@@ -1,0 +1,20 @@
+{
+	"version": 1,
+	"id": "unicode-escapes",
+	"description": "A JSON document whose text carries accents, an em dash, a currency sign, and an emoji. Multi-byte characters shift every later byte offset, so this is where a decoded range and a source range diverge for reasons that have nothing to do with escaping.",
+	"format": "json",
+	"slots": [
+		{ "name": "customer", "label": "person_name" },
+		{
+			"name": "accented",
+			"label": "person_name",
+			"value": "Renée Müller-Dupont",
+			"adversarial": "unusual_context",
+			"note": "Three multi-byte characters inside the name itself, so its own byte length exceeds its character count and every value after it sits further into the file."
+		},
+		{ "name": "email", "label": "email_address" },
+		{ "name": "iban", "label": "iban" },
+		{ "name": "amount", "label": "monetary_amount" },
+		{ "name": "phone", "label": "phone_number" }
+	]
+}

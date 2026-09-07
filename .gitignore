@@ -22,10 +22,23 @@ dist/
 build/
 output/
 
-# Generated corpora and benchmark runs. Both are reproducible from a seed and
-# a manifest, and a full corpus is far too large to track.
+# Rendered corpora and benchmark runs. Both are derived: a corpus is
+# reproducible from the tracked specifications in data/ plus a seed, and a
+# run from a corpus. Rendered scans and audio reach gigabytes, so neither
+# belongs in git.
 corpus/
 runs/
+
+# Generation writes here and renames it into place, so a failure cannot leave a
+# manifest from one run beside records from another. It should never survive a
+# run, but a killed process can strand one.
+*.staging/
+
+# Python
+.venv/
+__pycache__/
+.ruff_cache/
+__marimo__/
 
 # Environment
 .env*

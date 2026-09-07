@@ -1,0 +1,33 @@
+{
+	"version": 1,
+	"id": "neutral-headers",
+	"description": "The same values under headers that name them and headers that do not. A column called 'account' vouches for the digits under it; one called 'ref' does not. Nothing about the values changes, so any difference in detection comes entirely from the header.",
+	"format": "csv",
+	"slots": [
+		{ "name": "name", "label": "person_name" },
+		{
+			"name": "namedAccount",
+			"label": "bank_account",
+			"value": "000123456789",
+			"adversarial": "unusual_context",
+			"note": "Sits under a header reading 'account', which should lift an otherwise weak shape."
+		},
+		{
+			"name": "neutralAccount",
+			"label": "bank_account",
+			"value": "000987654321",
+			"expect": "ignored",
+			"adversarial": "unusual_context",
+			"note": "The same shape under a header reading 'ref'. With nothing to vouch for it, detecting it is over-redaction."
+		},
+		{ "name": "card", "label": "payment_card" },
+		{
+			"name": "serial",
+			"label": "bank_account",
+			"value": "000555000555",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "A hardware serial under a header reading 'serial'."
+		}
+	]
+}

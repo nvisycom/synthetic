@@ -1,0 +1,27 @@
+{
+	"version": 1,
+	"id": "checksum-pairs",
+	"description": "Checksum validation is what separates a real identifier from a number with the right shape. Each pair is one value that passes its checksum and must be detected, beside one that matches the same pattern and fails, which must not be. This is why detectors carry validators rather than length-based patterns.",
+	"format": "txt",
+	"slots": [
+		{ "name": "cardValid", "label": "payment_card" },
+		{
+			"name": "cardInvalid",
+			"label": "payment_card",
+			"value": "4111 1111 1111 1112",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "Card shape, correct length, fails Luhn on the final digit. A regex-only matcher flags it; a validating one does not."
+		},
+		{ "name": "ibanValid", "label": "iban" },
+		{
+			"name": "ibanInvalid",
+			"label": "iban",
+			"value": "GB29 NWBK 6016 1331 9268 000",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "IBAN shape with a broken mod-97 check."
+		},
+		{ "name": "contact", "label": "email_address" }
+	]
+}

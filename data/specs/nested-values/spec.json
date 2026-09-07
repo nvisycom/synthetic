@@ -1,0 +1,52 @@
+{
+	"version": 1,
+	"id": "nested-values",
+	"description": "Values placed throughout a structured JSON document — nested objects, an array of notes, a quoted alias. Escaping shifts every later byte offset in the file while leaving the decoded offsets alone, so the two coordinate systems diverge.",
+	"format": "json",
+	"slots": [
+		{
+			"name": "customer",
+			"label": "person_name",
+			"surfaces": ["canonical", "abbreviated"]
+		},
+		{
+			"name": "alias",
+			"label": "person_name",
+			"value": "Say \"Ace\" Delgado",
+			"adversarial": "unusual_context",
+			"note": "A quoted nickname inside the name. The quotes are escaped in the JSON source, so this value's decoded and source offsets differ, and so do those of everything after it."
+		},
+		{
+			"name": "agent",
+			"label": "person_name"
+		},
+		{
+			"name": "email",
+			"label": "email_address"
+		},
+		{
+			"name": "phone",
+			"label": "phone_number"
+		},
+		{
+			"name": "account",
+			"label": "bank_account"
+		},
+		{
+			"name": "card",
+			"label": "payment_card"
+		},
+		{
+			"name": "ip",
+			"label": "ip_address"
+		},
+		{
+			"name": "ticket",
+			"label": "case_number"
+		},
+		{
+			"name": "amount",
+			"label": "monetary_amount"
+		}
+	]
+}

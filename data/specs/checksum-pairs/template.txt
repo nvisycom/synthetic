@@ -1,0 +1,15 @@
+Payment validation report
+
+Each pair below is one value that passes its checksum and one that matches the
+same pattern but fails it. Only the first of each pair is a real identifier.
+
+Payment cards, validated with Luhn:
+  passes   {{cardValid}}
+  fails    {{cardInvalid}}
+
+International bank accounts, validated with mod-97:
+  passes   {{ibanValid}}
+  fails    {{ibanInvalid}}
+
+A detector working from shape alone cannot tell these apart and will flag all
+four. One carrying a validator flags two. Report questions to {{contact}}.

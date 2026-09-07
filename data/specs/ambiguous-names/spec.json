@@ -1,0 +1,86 @@
+{
+	"version": 1,
+	"id": "ambiguous-names",
+	"description": "Names that collide with ordinary English words, and one subject misspelled the way a hurried author would. A recognizer keyed on capitalization over-matches every sentence-initial 'April'; one keyed on a gazetteer skips the name entirely. Set in a security incident report, with identifiers buried in prose rather than labelled fields.",
+	"format": "txt",
+	"slots": [
+		{
+			"name": "reporter",
+			"label": "person_name",
+			"surfaces": ["canonical", "misspelled", "abbreviated"],
+			"value": "April Case",
+			"adversarial": "common_word",
+			"note": "Both names are ordinary English words. A recognizer keyed on capitalization alone over-matches every sentence-initial 'April' and 'Case' in the corpus; one keyed on a name gazetteer may skip it entirely."
+		},
+		{
+			"name": "analyst",
+			"label": "person_name",
+			"surfaces": ["canonical", "misspelled"],
+			"adversarial": "coreference",
+			"note": "Referred to twice, once misspelled. Catching the correct spelling and missing the typo is still a leak of the same person."
+		},
+		{
+			"name": "ticket",
+			"label": "case_number",
+			"value": "471-88-2130",
+			"adversarial": "format_collision",
+			"note": "An internal ticket number shaped exactly like a US SSN. A pattern matcher should flag it; a validating one should not. Either way the answer key says it is a case number, so a pipeline that calls it a government id is scored as mislabelled rather than as a hit."
+		},
+		{
+			"name": "host",
+			"label": "ip_address",
+			"adversarial": "unusual_context",
+			"note": "Sits inside a log line rather than a labelled field."
+		},
+		{
+			"name": "peer",
+			"label": "ip_address"
+		},
+		{
+			"name": "token",
+			"label": "api_key",
+			"adversarial": "unusual_context",
+			"note": "Appears mid-sentence in prose, not as a labelled credential."
+		},
+		{
+			"name": "account",
+			"label": "username"
+		},
+		{
+			"name": "endpoint",
+			"label": "url"
+		},
+		{
+			"name": "device",
+			"label": "device_id"
+		},
+		{
+			"name": "employer",
+			"label": "organization_name"
+		},
+		{
+			"name": "contact",
+			"label": "email_address"
+		},
+		{
+			"name": "loss",
+			"label": "monetary_amount"
+		},
+		{
+			"name": "cve",
+			"label": "case_number",
+			"value": "CVE-2026-31337",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "A public vulnerability identifier. Shaped like an internal case number, but it is a published reference and redacting it destroys the report's meaning."
+		},
+		{
+			"name": "buildId",
+			"label": "device_id",
+			"value": "8.4.1-rc2+build.20260311",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "A software build identifier, not a device. Version strings carry no personal data."
+		}
+	]
+}

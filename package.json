@@ -29,6 +29,9 @@
 	"bin": {
 		"synthetic": "./dist/main.js"
 	},
+	"imports": {
+		"#/*": "./src/*"
+	},
 	"scripts": {
 		"start": "node --experimental-strip-types src/main.ts",
 		"build": "tsdown",
@@ -38,6 +41,7 @@
 		"test:watch": "vitest --watch",
 		"test:coverage": "vitest run --coverage",
 		"test:ui": "vitest --ui",
+		"test:e2e": "vitest run --config vitest.e2e.config.ts",
 		"lint": "biome lint .",
 		"lint:fix": "biome lint --write .",
 		"format": "biome format --write .",
@@ -48,7 +52,12 @@
 		"clean": "rimraf dist"
 	},
 	"dependencies": {
-		"@nvisy/sdk": "^0.45.0"
+		"@faker-js/faker": "^10.6.0",
+		"@nvisy/sdk": "^0.45.0",
+		"citty": "^0.2.2",
+		"consola": "^3.4.2",
+		"pure-rand": "^8.4.2",
+		"zod": "^4.5.4"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.12",

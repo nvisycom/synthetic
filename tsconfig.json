@@ -20,10 +20,19 @@
 		"forceConsistentCasingInFileNames": true,
 		"resolveJsonModule": true,
 		"isolatedModules": true,
+		// Source imports carry a `.ts` extension so Node can run the CLI directly
+		// from source. tsc only rewrites those on *relative* paths, and would
+		// flag the `#/` ones — but tsdown owns emit here and bundles them away,
+		// so allow the extension and let the bundler resolve it.
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
 		"skipLibCheck": true,
 
+		// Mirrors the `imports` field in package.json, which is what actually
+		// resolves at runtime. A tsconfig-only alias would type-check and then
+		// fail when Node ran the source.
 		"paths": {
-			"@/*": ["./src/*"]
+			"#/*": ["./src/*"]
 		}
 	},
 	"include": ["src/**/*"],
