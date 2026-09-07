@@ -1,8 +1,5 @@
 name: Build
 
-env:
-  NODE_VERSION: "24"
-
 on:
   push:
     branches:
@@ -31,6 +28,10 @@ on:
       - ".github/workflows/build.yml"
   workflow_dispatch:
 
+env:
+  NODE_VERSION: "24"
+
+# Jobs only check out code and run local commands.
 permissions:
   contents: read
 
@@ -39,7 +40,7 @@ jobs:
     name: Lint & Format
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v7
 
       - name: Setup Node.js
@@ -61,7 +62,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v7
 
       - name: Setup Node.js
@@ -81,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, test]
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v7
 
       - name: Setup Node.js

@@ -1,8 +1,5 @@
 name: Security
 
-env:
-  NODE_VERSION: "24"
-
 on:
   push:
     branches:
@@ -26,6 +23,10 @@ on:
     - cron: "0 6 * * 1"
   workflow_dispatch:
 
+env:
+  NODE_VERSION: "24"
+
+# Jobs only check out code and run local commands.
 permissions:
   contents: read
 
@@ -39,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -60,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -75,20 +76,16 @@ jobs:
         run: npm ci --ignore-scripts
 
       # Informational: prints the dependency-license breakdown, does not gate.
-      # Fetched on demand rather than carried as a devDependency, since it is
-      # only ever run here.
       - name: Check licenses
-        run: npx --yes license-checker-rseidelsohn@5 --summary
+        run: npx --no-install license-checker-rseidelsohn --summary
 
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Requires the dependency graph, which on a private repository is gated
-    # behind GitHub Advanced Security. Runs automatically if this goes public.
-    if: github.event_name == 'pull_request' && !github.event.repository.private
+    if: github.event_name == 'pull_request'
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -108,7 +105,7 @@ jobs:
       security-events: write
       actions: read
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v7
         with:
           persist-credentials: false
