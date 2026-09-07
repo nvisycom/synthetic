@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * @fileoverview CLI entrypoint for the synthetic benchmark harness.
  *

@@ -39,9 +39,10 @@ npm install
 Before submitting changes:
 
 ```bash
-npm run check    # Lint, format, and type check
-npm test         # Run test suite
-npm run build    # Verify build works
+npm run check      # Lint and format
+npm run typecheck  # Verify TypeScript types
+npm test           # Run test suite
+npm run build      # Verify build works
 ```
 
 ## Ground Truth
