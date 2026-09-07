@@ -13,7 +13,8 @@ import { recordPath } from "#/manifest/layout.ts";
 import { writeManifest, writeRecord } from "#/manifest/write.ts";
 import { Random } from "#/random.ts";
 import { GeneratorError, generateRecord, validateSpec } from "./record.ts";
-import type { LoadedSpec, RecordSpec } from "./spec.ts";
+import { parseSpec } from "./spec.schema.ts";
+import type { LoadedSpec } from "./spec.ts";
 
 /**
  * Options accepted by {@link runGenerate}.
@@ -59,14 +60,19 @@ async function loadSpecs(dataDir: string): Promise<LoadedSpec[]> {
 	for (const dir of dirs.sort()) {
 		const specPath = join(specsDir, dir, "spec.json");
 
-		let spec: RecordSpec;
+		let raw: unknown;
 		try {
-			spec = JSON.parse(await readFile(specPath, "utf8")) as RecordSpec;
+			raw = JSON.parse(await readFile(specPath, "utf8"));
 		} catch (cause) {
 			throw new GeneratorError(
 				`Spec at ${specPath} could not be read: ${(cause as Error).message}`,
 			);
 		}
+
+		// Validated rather than cast: a spec is hand-written, so it is the one
+		// input here most likely to carry a typo, and the error should name the
+		// file that is wrong rather than surface three steps downstream.
+		const spec = parseSpec(raw, specPath);
 
 		const templatePath = join(specsDir, dir, spec.template ?? "template.txt");
 		let template: string;
