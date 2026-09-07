@@ -1,0 +1,30 @@
+{
+	"version": 1,
+	"id": "dense-patterns",
+	"description": "Strong, self-identifying values packed together. Each fires on its own shape with no keyword needed, so this measures the pattern layer directly. Includes values that overlap — an address inside a URL — which stress how a pipeline reconciles spans that share bytes.",
+	"format": "txt",
+	"slots": [
+		{ "name": "email", "label": "email_address" },
+		{ "name": "second", "label": "email_address" },
+		{ "name": "url", "label": "url" },
+		{ "name": "ipv4", "label": "ip_address" },
+		{ "name": "ipv6", "label": "ip_address" },
+		{ "name": "mac", "label": "mac_address" },
+		{ "name": "iban", "label": "iban" },
+		{ "name": "card", "label": "payment_card" },
+		{ "name": "key", "label": "api_key" },
+		{ "name": "phone", "label": "phone_number" },
+		{
+			"name": "nested",
+			"label": "email_address",
+			"adversarial": "unusual_context",
+			"note": "Written inside a URL path, so the address and the link share bytes. A pipeline must resolve the overlap into coherent spans rather than double-redacting or leaving a fragment."
+		},
+		{
+			"name": "adjacent",
+			"label": "phone_number",
+			"adversarial": "unusual_context",
+			"note": "Pasted directly against the preceding value with no separator, so the two spans touch."
+		}
+	]
+}

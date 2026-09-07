@@ -1,0 +1,24 @@
+{
+	"ticket": "{{ticket}}",
+	"opened": "2026-03-14T09:21:00Z",
+	"customer": {
+		"name": "{{customer}}",
+		"alias": "{{alias}}",
+		"email": "{{email}}",
+		"phone": "{{phone}}",
+		"lastSeenFrom": "{{ip}}"
+	},
+	"dispute": {
+		"amount": "{{amount}}",
+		"card": "{{card}}",
+		"settlesTo": "{{account}}",
+		"status": "credited pending review"
+	},
+	"notes": [
+		"Charge of {{amount}} disputed by {{customer:abbreviated}}.",
+		"Customer asked to be addressed as {{alias}} on all correspondence.",
+		"Reachable at {{email}}; do not call {{phone}} before 10:00 local."
+	],
+	"assignedTo": "{{agent}}",
+	"escalated": false
+}

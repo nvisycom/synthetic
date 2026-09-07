@@ -1,7 +1,7 @@
 {
 	"version": 1,
-	"id": "incident-report",
-	"description": "A security incident write-up in running prose. Deliberately hard: names that collide with common words, identifiers embedded in narrative rather than labelled fields, and one subject misspelled the way a hurried author would.",
+	"id": "ambiguous-names",
+	"description": "Names that collide with ordinary English words, and one subject misspelled the way a hurried author would. A recognizer keyed on capitalization over-matches every sentence-initial 'April'; one keyed on a gazetteer skips the name entirely. Set in a security incident report, with identifiers buried in prose rather than labelled fields.",
 	"format": "txt",
 	"slots": [
 		{
@@ -65,6 +65,22 @@
 		{
 			"name": "loss",
 			"label": "monetary_amount"
+		},
+		{
+			"name": "cve",
+			"label": "case_number",
+			"value": "CVE-2026-31337",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "A public vulnerability identifier. Shaped like an internal case number, but it is a published reference and redacting it destroys the report's meaning."
+		},
+		{
+			"name": "buildId",
+			"label": "device_id",
+			"value": "8.4.1-rc2+build.20260311",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "A software build identifier, not a device. Version strings carry no personal data."
 		}
 	]
 }

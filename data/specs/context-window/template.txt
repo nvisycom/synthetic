@@ -1,0 +1,14 @@
+Deposit setup, submitted for review
+
+The checking account {{nearAccount}} is where the direct deposit should land.
+
+The figure {{farAccount}} was recorded during the intake call last Tuesday by
+the duty officer, who noted the weather, the queue length, and several other
+details of no consequence before finally confirming that the customer wished
+to open an account.
+
+The reference {{bareAccount}} appears in the third column of the ledger.
+
+For comparison, two values that need no keyword at all: the social security
+number {{ssn}} and the payment card {{card}} both carry enough shape to be
+detected on their own.

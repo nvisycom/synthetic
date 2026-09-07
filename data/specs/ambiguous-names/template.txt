@@ -34,4 +34,8 @@ Questions about this report should go to {{contact}}. Note that a previous
 version circulated with the reporter's name misspelled as {{reporter:misspelled}};
 both spellings refer to the same individual.
 
+The underlying weakness is tracked publicly as {{cve}}, and the affected
+service was running build {{buildId}} at the time. Neither identifies a
+person, and redacting either would leave the report unactionable.
+
 Filed: {{reporter}}

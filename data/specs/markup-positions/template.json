@@ -1,0 +1,63 @@
+{
+	"tag": "ns:directory",
+	"attrs": {
+		"xmlns:ns": "urn:example:directory",
+		"xmlns:c": "urn:example:contact",
+		"generated": "2026-03-14"
+	},
+	"children": [
+		{
+			"tag": "entry",
+			"comment": "Reviewer note: escalate to {{commentEmail}} before Friday.",
+			"attrs": {
+				"email": "{{attrEmail}}",
+				"phone": "{{attrPhone}}"
+			},
+			"children": [
+				{
+					"tag": "name",
+					"text": "{{person}}"
+				},
+				{
+					"tag": "employer",
+					"text": "{{entityName}}"
+				},
+				{
+					"tag": "contact",
+					"text": "{{elementEmail}}"
+				},
+				{
+					"tag": "iban",
+					"text": "{{iban}}"
+				},
+				{
+					"tag": "serial",
+					"text": "{{serial}}"
+				},
+				{
+					"tag": "host",
+					"attrs": {
+						"address": "{{host}}"
+					}
+				},
+				{
+					"tag": "details",
+					"cdata": "Card {{cdataCard}} on file for {{person:abbreviated}}; no escaping applies inside CDATA."
+				},
+				{
+					"tag": "c:alternate",
+					"children": [
+						{
+							"tag": "c:email",
+							"text": "{{nsEmail}}"
+						},
+						{
+							"tag": "c:phone",
+							"text": "{{nsPhone}}"
+						}
+					]
+				}
+			]
+		}
+	]
+}

@@ -14,10 +14,15 @@ Each spec is a directory under `specs/`:
 
 ```
 specs/
-  claim-letter/
+  surface-variants/
     spec.json       which labels to plant, and how each is written
     template.txt    the document layout
 ```
+
+Specs are named for the mechanism they probe, not their subject matter:
+`checksum-pairs`, `context-window`, `weak-without-context`. The document a spec
+happens to look like — a claim letter, an incident report — is how the case is
+staged, not what it tests.
 
 `spec.json` names the slots; `template.txt` places them with `{{slot}}`
 placeholders, and `{{slot:surface}}` to write one in a particular form. The

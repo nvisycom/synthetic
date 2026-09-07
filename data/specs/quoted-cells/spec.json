@@ -1,0 +1,51 @@
+{
+	"version": 1,
+	"id": "quoted-cells",
+	"description": "Values that force RFC 4180 quoting: a name written surname-first carries a comma, and a note quoting that name carries one too. Quoting shifts a value's bytes in the file without moving it within its cell, which is what tabular source ranges exist to record.",
+	"format": "csv",
+	"slots": [
+		{
+			"name": "inverted",
+			"label": "person_name",
+			"value": "Reyes, Dana",
+			"adversarial": "unusual_context",
+			"note": "Written surname-first, so the comma forces RFC 4180 quoting and the value's bytes in the file no longer match its offsets in the cell."
+		},
+		{
+			"name": "customer",
+			"label": "person_name"
+		},
+		{
+			"name": "email",
+			"label": "email_address"
+		},
+		{
+			"name": "phone",
+			"label": "phone_number"
+		},
+		{
+			"name": "account",
+			"label": "bank_account"
+		},
+		{
+			"name": "card",
+			"label": "payment_card"
+		},
+		{
+			"name": "amount",
+			"label": "monetary_amount"
+		},
+		{
+			"name": "city",
+			"label": "city"
+		},
+		{
+			"name": "zip",
+			"label": "postal_code"
+		},
+		{
+			"name": "ip",
+			"label": "ip_address"
+		}
+	]
+}

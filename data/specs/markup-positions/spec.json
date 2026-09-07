@@ -1,0 +1,76 @@
+{
+	"version": 1,
+	"id": "markup-positions",
+	"description": "The four places an XML document can hide a value, each escaping differently: element text and attributes replace ampersands and angle brackets with entities, a comment escapes nothing, and CDATA escapes nothing at all. Namespaced elements carry their prefix in the tag, so a pipeline keying on plain element names sees a different string. A reader that walks only text nodes leaks everything else.",
+	"format": "xml",
+	"slots": [
+		{
+			"name": "person",
+			"label": "person_name",
+			"surfaces": ["canonical", "abbreviated"]
+		},
+		{
+			"name": "attrEmail",
+			"label": "email_address",
+			"adversarial": "unusual_context",
+			"note": "Carried in an attribute rather than element text. A reader that walks only text nodes never sees it."
+		},
+		{
+			"name": "attrPhone",
+			"label": "phone_number",
+			"adversarial": "unusual_context",
+			"note": "Also an attribute value."
+		},
+		{
+			"name": "commentEmail",
+			"label": "email_address",
+			"adversarial": "unusual_context",
+			"note": "Inside an XML comment. Comments are invisible to a renderer but present in the bytes, so a leak here survives every visual review."
+		},
+		{
+			"name": "cdataCard",
+			"label": "payment_card",
+			"adversarial": "unusual_context",
+			"note": "Inside CDATA, where nothing is escaped. The one place in an XML document where a value's decoded and source offsets coincide."
+		},
+		{
+			"name": "entityName",
+			"label": "organization_name",
+			"value": "Wright & Sons <Holdings>",
+			"adversarial": "unusual_context",
+			"note": "Contains an ampersand and angle brackets, so it is written as entities and occupies far more bytes in the file than in its decoded form."
+		},
+		{
+			"name": "iban",
+			"label": "iban"
+		},
+		{
+			"name": "host",
+			"label": "ip_address"
+		},
+		{
+			"name": "elementEmail",
+			"label": "email_address"
+		},
+		{
+			"name": "serial",
+			"label": "bank_account",
+			"value": "000123456789",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "A hardware serial under an element named 'serial'. Nothing vouches for it, so detecting it is over-redaction."
+		},
+		{
+			"name": "nsEmail",
+			"label": "email_address",
+			"adversarial": "unusual_context",
+			"note": "Inside a namespace-prefixed element, <c:email>. A pipeline matching on the element name 'email' for context sees 'c:email' instead and loses the boost."
+		},
+		{
+			"name": "nsPhone",
+			"label": "phone_number",
+			"adversarial": "unusual_context",
+			"note": "Also namespace-prefixed."
+		}
+	]
+}

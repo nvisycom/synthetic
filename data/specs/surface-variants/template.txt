@@ -23,6 +23,9 @@ which refers to the same individual.
 Questions may be sent to {{claimant:embedded}} or raised with your adjuster,
 {{adjuster}}.
 
+This letter was generated from form {{formRef}}. General enquiries go to
+our switchboard on {{deskPhone}}, which is published on our website.
+
 Sincerely,
 
 {{claimant:signature}}

@@ -1,0 +1,78 @@
+{
+	"version": 1,
+	"id": "surface-variants",
+	"description": "One subject written every way a document writes a person: in full, abbreviated, as an email local part, and as a signature block. A pipeline that catches the canonical spelling and misses the initials has still leaked. Set in an insurance claim letter, with two decoys that look sensitive and are not.",
+	"format": "txt",
+	"slots": [
+		{
+			"name": "claimant",
+			"label": "person_name",
+			"surfaces": ["canonical", "abbreviated", "signature", "embedded"]
+		},
+		{
+			"name": "adjuster",
+			"label": "person_name"
+		},
+		{
+			"name": "dob",
+			"label": "date_of_birth"
+		},
+		{
+			"name": "ssn",
+			"label": "government_id",
+			"surfaces": ["canonical", "reformatted"]
+		},
+		{
+			"name": "policy",
+			"label": "insurance_id"
+		},
+		{
+			"name": "claim",
+			"label": "case_number"
+		},
+		{
+			"name": "phone",
+			"label": "phone_number"
+		},
+		{
+			"name": "street",
+			"label": "street_address"
+		},
+		{
+			"name": "city",
+			"label": "city"
+		},
+		{
+			"name": "zip",
+			"label": "postal_code"
+		},
+		{
+			"name": "amount",
+			"label": "monetary_amount"
+		},
+		{
+			"name": "account",
+			"label": "bank_account"
+		},
+		{
+			"name": "insurer",
+			"label": "organization_name"
+		},
+		{
+			"name": "formRef",
+			"label": "case_number",
+			"value": "CLM-4471-B",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "The insurer's own form number, printed on every letter of this type. It identifies a template, not a claim or a person."
+		},
+		{
+			"name": "deskPhone",
+			"label": "phone_number",
+			"value": "1-800-555-0100",
+			"expect": "ignored",
+			"adversarial": "format_collision",
+			"note": "The insurer's public switchboard, printed in the footer. A published business number is not personal data, and redacting it makes the letter unusable."
+		}
+	]
+}

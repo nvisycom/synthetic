@@ -1,0 +1,3 @@
+name,account,card,ref,serial,note
+{{name}},{{namedAccount}},{{card}},{{neutralAccount}},{{serial}},primary
+{{name}},{{namedAccount}},{{card}},{{neutralAccount}},{{serial}},secondary
