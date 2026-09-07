@@ -48,7 +48,12 @@
 		"clean": "rimraf dist"
 	},
 	"dependencies": {
-		"@nvisy/sdk": "^0.45.0"
+		"@faker-js/faker": "^10.6.0",
+		"@nvisy/sdk": "^0.45.0",
+		"citty": "^0.2.2",
+		"consola": "^3.4.2",
+		"pure-rand": "^8.4.2",
+		"zod": "^4.5.4"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.12",

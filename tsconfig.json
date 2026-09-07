@@ -20,6 +20,9 @@
 		"forceConsistentCasingInFileNames": true,
 		"resolveJsonModule": true,
 		"isolatedModules": true,
+		// Source imports carry a `.ts` extension so Node can run the CLI
+		// directly from source; this rewrites them to `.js` on emit.
+		"rewriteRelativeImportExtensions": true,
 		"skipLibCheck": true,
 
 		"paths": {
