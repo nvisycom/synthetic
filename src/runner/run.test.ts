@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runGenerate } from "#/generator/generate.ts";
-import { BenchError, runBench } from "./bench.ts";
+import { ExecutionError, executeRun } from "./run.ts";
 
 let work: string;
 
@@ -27,12 +27,12 @@ async function corpus(records = 8): Promise<string> {
 	return out;
 }
 
-describe("runBench", () => {
+describe("executeRun", () => {
 	it("refuses to start without a reachable server", async () => {
 		// Reported as a message about the server rather than a failed signup:
 		// nothing answered, which has a different fix.
 		await expect(
-			runBench({
+			executeRun({
 				corpus: await corpus(2),
 				out: join(work, "runs"),
 				// A port nothing listens on.
@@ -44,7 +44,7 @@ describe("runBench", () => {
 	it("writes no run index when it cannot start", async () => {
 		// A partial run must not leave a file that looks like a benchmark result.
 		const out = join(work, "runs");
-		await runBench({
+		await executeRun({
 			corpus: await corpus(2),
 			out,
 			baseUrl: "http://127.0.0.1:9",
@@ -59,7 +59,7 @@ describe("runBench", () => {
 		// The flag exists so a run can be made deterministic in submission order
 		// when a failure needs chasing.
 		await expect(
-			runBench({
+			executeRun({
 				corpus: await corpus(2),
 				out: join(work, "runs"),
 				baseUrl: "http://127.0.0.1:9",
@@ -71,28 +71,33 @@ describe("runBench", () => {
 	it("rejects a concurrency that is not a positive integer", async () => {
 		// `Math.max(1, NaN)` is NaN, which spawns no workers: the loop never runs
 		// and an empty run would be written as a success.
+		//
+		// The message is asserted, not just that it threw. Every case here also
+		// has an unreachable server, so a test that only checked for a rejection
+		// would pass on the connection error and never notice that the
+		// concurrency check had stopped running.
 		for (const concurrency of [Number.NaN, 0, -1, 1.5]) {
 			await expect(
-				runBench({
+				executeRun({
 					corpus: await corpus(2),
 					out: join(work, "runs"),
 					baseUrl: "http://127.0.0.1:9",
 					concurrency,
 				}),
-			).rejects.toThrow();
+			).rejects.toThrow(/Concurrency must be a positive integer/);
 		}
 	}, 30_000);
 
 	it("explains how to use an existing account instead", async () => {
 		try {
-			await runBench({
+			await executeRun({
 				corpus: await corpus(2),
 				out: join(work, "runs"),
 				baseUrl: "http://127.0.0.1:9",
 			});
 			expect.unreachable("should have thrown");
 		} catch (error) {
-			expect(error).toBeInstanceOf(BenchError);
+			expect(error).toBeInstanceOf(ExecutionError);
 			expect((error as Error).message).toContain("--base-url");
 		}
 	}, 30_000);

@@ -16,6 +16,7 @@
  */
 
 import { z } from "zod";
+import { HarnessError } from "#/error.ts";
 import { LocationSchema } from "#/manifest/schema.ts";
 
 /** A non-negative integer. */
@@ -102,16 +103,8 @@ export const RunSchema = z
 /**
  * Raised when a run file cannot be trusted.
  */
-export class RunError extends Error {
+export class RunError extends HarnessError {
 	override readonly name = "RunError";
-
-	/** Every problem found, one line each. */
-	readonly issues: readonly string[];
-
-	constructor(message: string, issues: readonly string[]) {
-		super(message);
-		this.issues = issues;
-	}
 }
 
 /**

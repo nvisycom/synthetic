@@ -16,7 +16,8 @@
 
 import type { Nvisy } from "@nvisy/sdk";
 import type { Audit } from "@nvisy/sdk/datatypes";
-import type { Detected, RecordOutcome } from "./run.ts";
+import type { Range } from "#/datatypes/location.ts";
+import type { Detected, RecordOutcome } from "./outcome.ts";
 
 /**
  * Returns whether a failure is worth retrying.
@@ -110,43 +111,106 @@ const CONTENT_TYPES: Record<string, string> = {
  * Reads a detection's entities out of an analysis report.
  *
  * The report's parts are a discriminated union on modality, so narrowing on it
- * gives the right entity type per part. Only text parts are read for now, since
- * only text-bearing formats render; image, audio, and tabular entities are
- * skipped rather than mangled into a text location.
+ * gives the right entity type per part. Text and tabular parts are read, which
+ * is what the rendered formats produce; image and audio entities are skipped
+ * rather than mangled into a coordinate system they do not belong to.
  *
- * The pipeline reports a decoded coordinate, which is the same space the corpus
- * records its `ranges` in, so nothing is translated here — this only reshapes
- * what came back into the run's own vocabulary. An unrecognized label is kept
- * rather than dropped, since a label the harness does not know is a fact worth
- * reporting rather than hiding.
+ * A text entity's source range is preferred over its decoded one, because that
+ * is the space ground truth records: the raw file. A decoded range depends on
+ * how the pipeline extracted text from the document, and comparing against it
+ * would score the harness' agreement with one extractor rather than the
+ * pipeline's detection. Nothing is translated here either way — this only
+ * reshapes what came back into the run's own vocabulary.
+ *
+ * An unrecognized label is kept rather than dropped, since a label the harness
+ * does not know is a fact worth reporting rather than hiding.
  */
+function attribution(entity: {
+	id: string;
+	label: string;
+	confidence: number;
+	audit: { source: string }[];
+}): Omit<Detected, "location"> {
+	return {
+		id: entity.id,
+		label: entity.label,
+		confidence: entity.confidence,
+		// The first audit event names what found it, which is the most useful
+		// single attribution for a report.
+		...(entity.audit[0] !== undefined
+			? { recognizer: entity.audit[0].source }
+			: {}),
+	};
+}
+
 export function readAnalysis(analysis: Audit): Detected[] {
 	const detected: Detected[] = [];
 
 	for (const part of analysis.report.parts) {
-		if (part.modality !== "text") continue;
+		if (part.modality === "text") {
+			for (const entity of part.entities) {
+				const { coord } = entity.location;
+				// The raw file ranges, which is what ground truth records. A decoded
+				// coordinate carries them alongside; a source coordinate is already
+				// in that space.
+				// The raw file ranges. A decoded coordinate leaves `source` empty
+				// exactly when the two coincide — a plain text file, where the bytes
+				// on disk are the decoded text — so its own range is the file range
+				// in that case.
+				const source = coord.source?.map((span) => span.range) ?? [];
+				const ranges =
+					source.length > 0
+						? source
+						: coord.kind === "decoded"
+							? [coord.range]
+							: [];
 
-		for (const entity of part.entities) {
-			const { coord } = entity.location;
-			// A source-only coordinate has no decoded range to compare against
-			// ground truth, so it is left for the scorer to report as unplaceable
-			// rather than guessed at here.
-			if (coord.kind !== "decoded") continue;
+				// A source coordinate with no spans places nothing, so it is left for
+				// the scorer to report as unplaceable rather than guessed at here.
+				if (ranges.length === 0) continue;
 
-			detected.push({
-				id: entity.id,
-				label: entity.label,
-				location: {
-					kind: "text",
-					ranges: [{ start: coord.range.start, end: coord.range.end }],
-				},
-				confidence: entity.confidence,
-				// The first audit event names what found it, which is the most
-				// useful single attribution for a report.
-				...(entity.audit[0] !== undefined
-					? { recognizer: entity.audit[0].source }
-					: {}),
-			});
+				detected.push({
+					...attribution(entity),
+					location: {
+						kind: "text",
+						ranges: ranges as [Range, ...Range[]],
+					},
+				});
+			}
+			continue;
+		}
+
+		if (part.modality === "tabular") {
+			for (const entity of part.entities) {
+				const { location } = entity;
+				detected.push({
+					...attribution(entity),
+					location: {
+						kind: "tabular",
+						row: location.row_index,
+						column: location.column_index,
+						...(location.column_name !== undefined
+							? { columnName: location.column_name }
+							: {}),
+						...(location.sheet_name !== undefined
+							? { sheetName: location.sheet_name }
+							: {}),
+						// Unset offsets mean the whole cell, and are left unset rather
+						// than filled in: a zero-width range at 0 is indistinguishable
+						// from a genuine empty match there, and a made-up width would
+						// score as a boundary miss against the value's real one.
+						...(location.start_offset !== undefined ||
+						location.end_offset !== undefined
+							? {
+									cell: {
+										start: location.start_offset ?? 0,
+										end: location.end_offset ?? location.start_offset ?? 0,
+									},
+								}
+							: {}),
+					},
+				});
+			}
 		}
 	}
 
