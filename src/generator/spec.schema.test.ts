@@ -21,7 +21,7 @@ const slotMatches: Eq<z.infer<typeof SlotSpecSchema>, SlotSpec> = true;
 function valid(): unknown {
 	return {
 		version: 1,
-		id: "claim-letter",
+		id: "surface-variants",
 		description: "A well-behaved form.",
 		format: "txt",
 		slots: [
@@ -63,7 +63,7 @@ describe("schema and interface agreement", () => {
 describe("parseSpec", () => {
 	it("accepts a well-formed spec", () => {
 		const spec = parseSpec(valid(), "spec.json");
-		expect(spec.id).toBe("claim-letter");
+		expect(spec.id).toBe("surface-variants");
 		expect(spec.slots).toHaveLength(2);
 	});
 
@@ -169,6 +169,26 @@ describe("slots", () => {
 			}
 		});
 		expect(() => parseSpec(spec, "spec.json")).not.toThrow();
+	});
+
+	it("accepts a slot the pipeline must not detect", () => {
+		// The precision half of the benchmark: a value that looks sensitive but is
+		// not, so finding it is a false positive.
+		const spec = broken((draft: never) => {
+			const slot = (draft as { slots: { expect?: string }[] }).slots[0];
+			if (slot) slot.expect = "ignored";
+		});
+		expect(() => parseSpec(spec, "spec.json")).not.toThrow();
+	});
+
+	it("rejects an expectation it does not understand", () => {
+		expectRejected(
+			broken((spec: never) => {
+				const slot = (spec as { slots: { expect?: string }[] }).slots[0];
+				if (slot) slot.expect = "maybe";
+			}),
+			/expect/,
+		);
 	});
 
 	it("rejects a spec with no slots", () => {

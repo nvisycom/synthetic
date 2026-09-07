@@ -105,6 +105,15 @@ export interface Entity {
 	variants?: Partial<Record<SurfaceForm, string>>;
 
 	/**
+	 * Whether a pipeline is expected to detect this value.
+	 *
+	 * `ignored` marks a value planted to test precision: it looks sensitive but
+	 * is not, so finding it is a false positive rather than a hit. Absent means
+	 * detected, which is the common case.
+	 */
+	expect?: "detected" | "ignored";
+
+	/**
 	 * Why this entity is hard, when it was chosen to be.
 	 *
 	 * Absent for ordinary entities. Present entries are reported as their own

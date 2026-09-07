@@ -52,6 +52,7 @@ export const SlotSpecSchema = z.strictObject({
 	name: slotName,
 	label,
 	surfaces: z.array(z.enum(SURFACE_FORMS)).nonempty().optional(),
+	expect: z.enum(["detected", "ignored"]).optional(),
 	adversarial: z.enum(ADVERSARIAL_KINDS).optional(),
 	note: z.string().min(1).optional(),
 	value: z.string().min(1).optional(),

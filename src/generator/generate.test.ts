@@ -242,7 +242,9 @@ describe("runGenerate", () => {
 		// Accepting one would write plain text into a document.pdf and record it
 		// as a valid PDF record — a corpus that looks generated and is not.
 		await writeSpec({ ...SPEC, format: "pdf" });
-		await expect(runGenerate(options())).rejects.toThrow(/no renderer/);
+		await expect(runGenerate(options())).rejects.toThrow(
+			/no renderer|no template loader/,
+		);
 	});
 
 	it("leaves an existing corpus untouched when generation fails", async () => {
@@ -276,6 +278,64 @@ describe("runGenerate", () => {
 		await expect(
 			readFile(join(`${out}.staging`, "manifest.json")),
 		).rejects.toThrow();
+	});
+
+	it("generates a JSON record whose source ranges index the real file", async () => {
+		// The dual-coordinate model end to end: decoded ranges index the string a
+		// detector reads, source ranges index the bytes on disk, and escaping
+		// pulls the two apart.
+		const jsonSpec: RecordSpec = {
+			version: 1,
+			id: "json-case",
+			description: "A structured record with an escaped value.",
+			format: "json",
+			slots: [
+				{ name: "subject", label: "person_name" },
+				{ name: "id", label: "government_id" },
+			],
+			template: "template.json",
+		};
+		const dir = join(data, "specs", jsonSpec.id);
+		await mkdir(dir, { recursive: true });
+		await writeFile(
+			join(dir, "spec.json"),
+			JSON.stringify(jsonSpec, null, 2),
+			"utf8",
+		);
+		await writeFile(
+			join(dir, "template.json"),
+			JSON.stringify({
+				alias: 'Known as "Ace" {{subject}}',
+				reference: "{{id}}",
+			}),
+			"utf8",
+		);
+
+		await runGenerate(options({ records: "1" }));
+
+		const manifest = await readManifest(out);
+		const entry = manifest.records[0];
+		if (!entry) throw new Error("expected a record");
+		const record = await readRecord(out, entry);
+		const file = await readFile(join(out, entry.path, record.artifact), "utf8");
+
+		expect(() => JSON.parse(file)).not.toThrow();
+
+		let shifted = 0;
+		for (const occurrence of record.occurrences) {
+			if (occurrence.location.kind !== "text") continue;
+			const { source, ranges } = occurrence.location;
+			expect(source).toBeDefined();
+
+			const raw = (source ?? [])
+				.map((range) => sliceByteRange(file, range))
+				.join("");
+			expect(JSON.parse(`"${raw}"`)).toBe(occurrence.text);
+
+			if ((source?.[0]?.start ?? 0) !== (ranges[0]?.start ?? 0)) shifted++;
+		}
+		// The escaped quotes must have moved something.
+		expect(shifted).toBeGreaterThan(0);
 	});
 
 	it("reports a missing specs directory", async () => {
