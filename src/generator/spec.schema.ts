@@ -18,6 +18,7 @@ import { ADVERSARIAL_KINDS, SURFACE_FORMS } from "#/datatypes/entity.ts";
 import type { Label } from "#/datatypes/label.ts";
 import { isLabel, LABEL_IDS } from "#/datatypes/label.ts";
 import { DOCUMENT_FORMATS } from "#/datatypes/record.ts";
+import { HarnessError } from "#/error.ts";
 
 /**
  * A label id, checked against the taxonomy.
@@ -117,16 +118,8 @@ export const RecordSpecSchema = z
 /**
  * Raised when a spec cannot be used.
  */
-export class SpecError extends Error {
+export class SpecError extends HarnessError {
 	override readonly name = "SpecError";
-
-	/** Every problem found, one line each. */
-	readonly issues: readonly string[];
-
-	constructor(message: string, issues: readonly string[]) {
-		super(message);
-		this.issues = issues;
-	}
 }
 
 /**

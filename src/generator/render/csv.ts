@@ -10,112 +10,102 @@
  * means scoring compares like with like, with no translation step in the middle
  * where an off-by-one could hide.
  *
- * Quoting still matters for the source ranges. RFC 4180 wraps a cell containing
- * a comma, quote, or newline in quotes and doubles any quote inside it — so a
- * name like `Reyes, Dana` occupies more bytes in the file than in the cell, and
- * a redactor overwriting the wrong span would clip it.
+ * Quoting is why a value's byte range is not simply where it sits in its cell.
+ * RFC 4180 wraps a cell containing a comma, quote, or newline in quotes and
+ * doubles any quote inside it, so `Reyes, "Dana"` occupies more bytes in the
+ * file than the value itself does. Both coordinates are recorded: the cell
+ * address a detection names, and the bytes a redaction must cover.
+ *
+ * Unlike the other formats, quoting is decided by the whole cell rather than by
+ * the value — a comma anywhere in the cell quotes it — so a value's written form
+ * is not known until the cell is complete. The row is therefore assembled first
+ * with markers in place, exactly as the other renderers do, and quoting is
+ * applied to the finished cell.
  *
  * @module generator/render/csv
  */
 
 import type { Entity } from "#/datatypes/entity.ts";
 import type { Range } from "#/datatypes/location.ts";
-import type { Occurrence } from "#/datatypes/record.ts";
 import { byteLength } from "#/util/offset.ts";
-import { PLACEHOLDER, resolveSlot, TemplateError } from "../template.ts";
+import {
+	Markers,
+	PLACEHOLDER,
+	resolveSlot,
+	TemplateError,
+	verbatim,
+} from "../template.ts";
 import type { Rendered } from "./index.ts";
 
 /** Separates cells; the newline separates rows. */
 const DELIMITER = ",";
 
 /**
- * A cell's text with the values planted in it recorded.
+ * Whether RFC 4180 requires this cell to be quoted.
  */
-interface Cell {
-	/** The cell's decoded text, as a parser would return it. */
-	text: string;
-
-	/** Values planted in it, positioned within the cell. */
-	planted: {
-		entity: Entity;
-		surface: Occurrence["surface"];
-		value: string;
-		range: Range;
-	}[];
+function quoted(cell: string): boolean {
+	return /[",\n\r]/.test(cell);
 }
 
 /**
- * Fills a cell's placeholders, recording where each value sits within it.
+ * How a quoted cell writes a value planted inside it.
+ *
+ * The only rewriting CSV does to a value, and it applies exactly when the cell
+ * around it is quoted — which is why the decision is made per cell rather than
+ * per value.
  */
-function fillCell(
+function doubleQuotes(value: string): string {
+	return value.replaceAll('"', '""');
+}
+
+/**
+ * Replaces every placeholder in a cell with whatever `write` returns for it.
+ *
+ * `onValue` and `onLiteral` see each piece in order as it is written, which is
+ * how the caller measures where a value lands without scanning the result.
+ */
+function fill(
 	template: string,
-	entities: ReadonlyMap<string, Entity>,
-): Cell {
-	const cell: Cell = { text: "", planted: [] };
-	let bytes = 0;
-	let last = 0;
-
+	write: (name: string, requested?: string) => string,
+	onValue?: (written: string) => void,
+	onLiteral?: (literal: string) => void,
+): string {
 	PLACEHOLDER.lastIndex = 0;
-	let match = PLACEHOLDER.exec(template);
+	let last = 0;
+	let out = "";
 
-	while (match !== null) {
+	for (const match of template.matchAll(PLACEHOLDER)) {
 		const literal = template.slice(last, match.index);
-		cell.text += literal;
-		bytes += byteLength(literal);
+		out += literal;
+		onLiteral?.(literal);
 
 		const [placeholder, name, requested] = match;
-		const resolved = resolveSlot(entities, name, requested);
-
-		const start = bytes;
-		cell.text += resolved.value;
-		bytes += byteLength(resolved.value);
-
-		cell.planted.push({
-			entity: resolved.entity,
-			surface: resolved.surface,
-			value: resolved.value,
-			range: { start, end: bytes },
-		});
+		const written = write(name as string, requested);
+		out += written;
+		onValue?.(written);
 
 		last = match.index + placeholder.length;
-		match = PLACEHOLDER.exec(template);
 	}
 
-	cell.text += template.slice(last);
-	return cell;
+	const tail = template.slice(last);
+	onLiteral?.(tail);
+	return out + tail;
 }
 
 /**
- * Quotes a cell for the file, if RFC 4180 requires it.
+ * Where a value sits in the table, carried through serialization so the
+ * occurrence can name it.
  *
- * Returns the bytes to write and the offset at which the cell's own text
- * begins, which is 1 when quoted and 0 otherwise.
+ * The cell address and the in-cell range are both fixed before the document is
+ * assembled — they describe the parsed table, which quoting does not change —
+ * while the file range is only known once everything around it is written.
  */
-function quote(text: string): { written: string; contentOffset: number } {
-	if (!/[",\n\r]/.test(text)) {
-		return { written: text, contentOffset: 0 };
-	}
-	// A quote inside a quoted cell is written twice.
-	return { written: `"${text.replaceAll('"', '""')}"`, contentOffset: 1 };
-}
-
-/**
- * Maps a byte offset in a cell's text to its offset in the quoted form.
- *
- * Only doubled quotes shift it, and only those before the offset. The prefix is
- * measured in bytes rather than sliced by string index: the two diverge as soon
- * as a cell holds a multi-byte character, and slicing by the byte offset would
- * count quotes that sit after the value rather than before it.
- */
-function shiftForQuoting(text: string, offset: number): number {
-	let bytes = 0;
-	let doubled = 0;
-	for (const character of text) {
-		if (bytes >= offset) break;
-		if (character === '"') doubled++;
-		bytes += byteLength(character);
-	}
-	return offset + doubled;
+interface CellAddress {
+	row: number;
+	column: number;
+	columnName?: string;
+	/** The value's byte range within the cell's parsed value. */
+	cell: Range;
 }
 
 /**
@@ -142,14 +132,8 @@ export function renderCsv(
 	}
 	const columnNames = header.map((name) => String(name));
 
-	const occurrences: Occurrence[] = [];
-	let text = "";
-	let bytes = 0;
-	// The decoded modality is every cell's content in reading order, so a
-	// detector over the extracted text sees what a person would. No byte counter
-	// is needed alongside it: tabular occurrences are addressed by cell, so their
-	// offsets are relative to the cell rather than to this string.
-	let decoded = "";
+	const markers = new Markers<CellAddress>();
+	const lines: string[] = [];
 
 	for (const [rowIndex, row] of template.entries()) {
 		if (!Array.isArray(row)) {
@@ -158,58 +142,67 @@ export function renderCsv(
 			);
 		}
 
-		for (const [columnIndex, raw] of row.entries()) {
-			if (columnIndex > 0) {
-				text += DELIMITER;
-				bytes += 1;
-			}
+		const cells = row.map((raw, columnIndex) => {
+			const columnName = columnNames[columnIndex];
 
-			const cell = fillCell(String(raw), entities);
-			const { written, contentOffset } = quote(cell.text);
+			// The cell is filled twice. First with the real values, which settles
+			// two things that cannot be known any other way: whether the cell needs
+			// quoting — a planted `Reyes, Dana` brings the comma that a template
+			// cell of `{{who}}` does not have — and where each value sits in the
+			// parsed cell, which is the coordinate a detection over a table comes
+			// back in. Then again with markers, to be positioned in the file.
+			// Filling twice is safe: `resolveSlot` returns the form the entity
+			// already holds rather than drawing a new one.
+			const cellRanges: Range[] = [];
+			let cellBytes = 0;
+			const filled = fill(
+				String(raw),
+				(name, requested) => resolveSlot(entities, name, requested).value,
+				(written) => {
+					cellRanges.push({
+						start: cellBytes,
+						end: cellBytes + byteLength(written),
+					});
+					cellBytes += byteLength(written);
+				},
+				(literal) => {
+					cellBytes += byteLength(literal);
+				},
+			);
 
-			// Where this cell's content starts in the file, past any opening quote.
-			const cellStart = bytes + contentOffset;
-
-			for (const planted of cell.planted) {
-				occurrences.push({
-					id: `occ_${String(occurrences.length).padStart(4, "0")}`,
-					entityId: planted.entity.id,
-					modalityId,
-					surface: planted.surface,
-					text: planted.value,
-					location: {
-						kind: "tabular",
-						row: rowIndex,
-						column: columnIndex,
-						...(columnNames[columnIndex] !== undefined
-							? { columnName: columnNames[columnIndex] }
-							: {}),
-						// Whole-cell values record no range, matching the SDK, where an
-						// unset offset means the entity is the cell.
-						...(planted.range.start === 0 &&
-						planted.range.end === byteLength(cell.text)
-							? {}
-							: { range: planted.range }),
-						source: [
-							{
-								start:
-									cellStart + shiftForQuoting(cell.text, planted.range.start),
-								end: cellStart + shiftForQuoting(cell.text, planted.range.end),
-							},
-						] as [Range, ...Range[]],
-					},
+			const escapeWith = quoted(filled) ? doubleQuotes : verbatim;
+			let planted = 0;
+			const marked = fill(String(raw), (name, requested) => {
+				const cell = cellRanges[planted++];
+				if (cell === undefined) {
+					throw new TemplateError("Cell filled inconsistently across passes");
+				}
+				return markers.place(entities, name, requested, escapeWith, {
+					row: rowIndex,
+					column: columnIndex,
+					...(columnName !== undefined ? { columnName } : {}),
+					cell,
 				});
-			}
+			});
 
-			text += written;
-			bytes += byteLength(written);
-			decoded += cell.text;
-		}
+			return quoted(filled) ? `"${marked.replaceAll('"', '""')}"` : marked;
+		});
 
-		text += "\n";
-		bytes += 1;
-		decoded += "\n";
+		lines.push(cells.join(DELIMITER));
 	}
 
-	return { text, decoded, occurrences };
+	return markers.resolve(
+		`${lines.join("\n")}\n`,
+		modalityId,
+		({ context, range }) => ({
+			kind: "tabular",
+			row: context.row,
+			column: context.column,
+			...(context.columnName !== undefined
+				? { columnName: context.columnName }
+				: {}),
+			ranges: [range],
+			cell: context.cell,
+		}),
+	);
 }

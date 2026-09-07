@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Entity } from "#/datatypes/entity.ts";
-import { sliceByteRange } from "#/util/offset.ts";
 import { TemplateError } from "../template.ts";
 import { parseCsv } from "./csv.parse.ts";
 import { renderCsv } from "./csv.ts";
+import { expectVerifiable } from "./verifiable.ts";
 
 function entity(id: string, value: string): Entity {
 	return { id, label: "person_name", value };
@@ -11,18 +11,6 @@ function entity(id: string, value: string): Entity {
 
 function slots(...pairs: [string, Entity][]): Map<string, Entity> {
 	return new Map(pairs);
-}
-
-/** Asserts every source range covers its value in the rendered file. */
-function expectVerifiable(rendered: ReturnType<typeof renderCsv>): void {
-	for (const occurrence of rendered.occurrences) {
-		if (occurrence.location.kind !== "tabular") continue;
-		const raw = (occurrence.location.source ?? [])
-			.map((range) => sliceByteRange(rendered.text, range))
-			.join("");
-		// A quoted cell doubles any quote inside it.
-		expect(raw.replaceAll('""', '"')).toBe(occurrence.text);
-	}
 }
 
 describe("renderCsv", () => {
@@ -43,29 +31,80 @@ describe("renderCsv", () => {
 		expect(location.columnName).toBe("name");
 	});
 
-	it("records no range when the value is the whole cell", () => {
-		// Matching the SDK, where an unset offset means the entity is the cell.
+	it("locates a value occupying its whole cell", () => {
 		const rendered = renderCsv(
 			[["name"], ["{{who}}"]],
 			slots(["who", entity("ent_1", "Dana Reyes")]),
 			"mod_1",
 		);
-		const location = rendered.occurrences[0]?.location;
-		if (location?.kind !== "tabular") throw new Error("expected tabular");
-		expect(location.range).toBeUndefined();
+
+		expectVerifiable(rendered);
+
+		const occurrence = rendered.occurrences[0];
+		if (occurrence?.location.kind !== "tabular") {
+			throw new Error("expected tabular");
+		}
+		// Past the `name\n` header, and covering the cell exactly.
+		expect(occurrence.location.ranges?.[0]).toEqual({ start: 5, end: 15 });
+		expect(rendered.text).toBe("name\nDana Reyes\n");
 	});
 
-	it("records a range when the value sits inside a longer cell", () => {
+	it("addresses a value in its cell as well as in the file", () => {
+		// A detection over a table comes back naming a row, a column, and an
+		// offset into that cell — never a file offset — so ground truth records
+		// the same thing beside the bytes.
+		const rendered = renderCsv(
+			[["note"], ['Ref "A" for {{who}}, urgent']],
+			slots(["who", entity("ent_1", "Dana")]),
+			"mod_1",
+		);
+
+		expectVerifiable(rendered);
+
+		const occurrence = rendered.occurrences[0];
+		if (occurrence?.location.kind !== "tabular") {
+			throw new Error("expected tabular");
+		}
+		// The comma and quotes force the cell to be quoted, which moves the file
+		// range but leaves the cell range alone: `Ref "A" for ` is 12 bytes of the
+		// cell's own value however the file writes it.
+		expect(occurrence.location.cell).toEqual({ start: 12, end: 16 });
+		expect(occurrence.location.ranges?.[0]?.start).toBeGreaterThan(16);
+
+		const [range] = occurrence.location.ranges ?? [];
+		if (range === undefined) throw new Error("expected a file range");
+		expect(rendered.text.slice(range.start, range.end)).toBe("Dana");
+
+		// And the cell range indexes the parsed cell, as a detector would report.
+		const rows = parseCsv(rendered.text);
+		const cell = rows[occurrence.location.row]?.[occurrence.location.column];
+		expect(
+			cell?.slice(
+				occurrence.location.cell?.start,
+				occurrence.location.cell?.end,
+			),
+		).toBe("Dana");
+	});
+
+	it("locates a value sitting inside a longer cell", () => {
 		const rendered = renderCsv(
 			[["note"], ["Filed by {{who}} today"]],
 			slots(["who", entity("ent_1", "Dana Reyes")]),
 			"mod_1",
 		);
-		const location = rendered.occurrences[0]?.location;
-		if (location?.kind !== "tabular") throw new Error("expected tabular");
-		expect(location.range).toEqual({ start: 9, end: 19 });
-	});
 
+		expectVerifiable(rendered);
+
+		const occurrence = rendered.occurrences[0];
+		if (occurrence?.location.kind !== "tabular") {
+			throw new Error("expected tabular");
+		}
+		// The cell holds no comma or quote, so it is unquoted and the value sits
+		// at "note\n" plus "Filed by ".
+		expect(occurrence.location.ranges?.[0]).toEqual({ start: 14, end: 24 });
+		expect(occurrence.location.row).toBe(1);
+		expect(occurrence.location.column).toBe(0);
+	});
 	it("quotes a cell whose value contains a comma", () => {
 		// The case that forces RFC 4180 quoting and shifts the source offsets.
 		const rendered = renderCsv(
@@ -87,21 +126,30 @@ describe("renderCsv", () => {
 		expectVerifiable(rendered);
 	});
 
-	it("shifts source offsets past the doubled quotes", () => {
+	it("counts the doubled quotes a quoted cell adds before the value", () => {
 		const rendered = renderCsv(
 			[["note"], ['Alias "X" for {{who}}']],
 			slots(["who", entity("ent_1", "Dana")]),
 			"mod_1",
 		);
-		const location = rendered.occurrences[0]?.location;
-		if (location?.kind !== "tabular") throw new Error("expected tabular");
-		// Two doubled quotes before the value, plus the opening quote.
-		expect(location.source?.[0]?.start).toBeGreaterThan(
-			location.range?.start ?? 0,
-		);
-		expectVerifiable(rendered);
-	});
 
+		expectVerifiable(rendered);
+
+		// The cell holds quotes, so it is wrapped and every quote inside doubled:
+		// `note\n"Alias ""X"" for Dana"\n`.
+		expect(rendered.text).toBe('note\n"Alias ""X"" for Dana"\n');
+
+		const occurrence = rendered.occurrences[0];
+		if (occurrence?.location.kind !== "tabular") {
+			throw new Error("expected tabular");
+		}
+		// 5 for the header, 1 for the opening quote, 14 for `Alias "X" for ` with
+		// its two quotes doubled to four characters.
+		const [range] = occurrence.location.ranges ?? [];
+		if (range === undefined) throw new Error("expected a file range");
+		expect(range).toEqual({ start: 22, end: 26 });
+		expect(rendered.text.slice(range.start, range.end)).toBe("Dana");
+	});
 	it("leaves an unquoted cell's offsets alone", () => {
 		const rendered = renderCsv(
 			[["name"], ["{{who}}"]],

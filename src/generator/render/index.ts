@@ -4,11 +4,11 @@
  * A renderer turns a spec's template into the bytes of a document, planting
  * entities as it goes and recording where each one landed.
  *
- * Two coordinate systems matter, and a renderer reports both. `decoded` is the
- * string content a detector reads, which occurrence `ranges` index; the
- * document's bytes are what a redactor overwrites, which `source` ranges index.
- * In a plain text file the two coincide and no source ranges are recorded; a
- * structured format pulls them apart.
+ * Positions are recorded against the file's own bytes, whatever the format
+ * escapes or wraps them in. A renderer knows where a value landed while it is
+ * writing it, so it records that directly rather than leaving the offsets to be
+ * searched for afterwards — and the harness never has to decode a document to
+ * say where something is.
  *
  * @module generator/render
  */
@@ -27,15 +27,7 @@ export interface Rendered {
 	/** The document's bytes, as written to disk. */
 	text: string;
 
-	/**
-	 * The string content a detector reads, escapes resolved.
-	 *
-	 * Recorded as the record's text modality, and what occurrence `ranges`
-	 * index. Equals {@link text} for a plain text document.
-	 */
-	decoded: string;
-
-	/** Every planted value, with its position in both coordinate systems. */
+	/** Every planted value, positioned in those bytes. */
 	occurrences: Occurrence[];
 }
 

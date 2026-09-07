@@ -21,6 +21,7 @@ import type { Label } from "#/datatypes/label.ts";
 import { isLabel } from "#/datatypes/label.ts";
 import type { Range } from "#/datatypes/location.ts";
 import { DOCUMENT_FORMATS, MODALITY_KINDS } from "#/datatypes/record.ts";
+import { HarnessError } from "#/error.ts";
 
 /** A non-negative integer, as every offset and dimension here must be. */
 const offset = z.number().int().nonnegative();
@@ -58,9 +59,6 @@ export const TextLocationSchema = z.strictObject({
 	ranges: z.array(RangeSchema).nonempty() as unknown as z.ZodType<
 		[Range, ...Range[]]
 	>,
-	source: (
-		z.array(RangeSchema).nonempty() as unknown as z.ZodType<[Range, ...Range[]]>
-	).optional(),
 	page: offset.optional(),
 });
 
@@ -87,10 +85,10 @@ export const TabularLocationSchema = z.strictObject({
 	column: offset,
 	columnName: z.string().min(1).optional(),
 	sheetName: z.string().min(1).optional(),
-	range: RangeSchema.optional(),
-	source: (
+	ranges: (
 		z.array(RangeSchema).nonempty() as unknown as z.ZodType<[Range, ...Range[]]>
 	).optional(),
+	cell: RangeSchema.optional(),
 });
 
 export const LocationSchema = z.discriminatedUnion("kind", [
@@ -129,6 +127,7 @@ export const OccurrenceSchema = z.strictObject({
 	modalityId: identifier,
 	surface: z.enum(SURFACE_FORMS),
 	text: z.string().min(1),
+	written: z.string().min(1),
 	transcribed: z.string().optional(),
 	location: LocationSchema,
 	splitAcross: z
@@ -279,22 +278,8 @@ export const CorpusRecordSchema = z
 /**
  * Raised when a corpus file cannot be trusted.
  */
-export class ManifestError extends Error {
+export class ManifestError extends HarnessError {
 	override readonly name = "ManifestError";
-
-	/**
-	 * Every problem found, one line each, for logging.
-	 *
-	 * Assigned in the body rather than declared as a parameter property, which
-	 * Node's type stripping does not support — the CLI runs from source, so a
-	 * parameter property here would crash it while still passing tests.
-	 */
-	readonly issues: readonly string[];
-
-	constructor(message: string, issues: readonly string[]) {
-		super(message);
-		this.issues = issues;
-	}
 }
 
 /**

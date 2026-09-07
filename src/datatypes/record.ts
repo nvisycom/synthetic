@@ -88,13 +88,29 @@ export interface Occurrence {
 	surface: SurfaceForm;
 
 	/**
-	 * The literal text as it appears here.
+	 * The value as written at this spot, before the format escaped it.
 	 *
-	 * For a text modality this equals the modality's text sliced by the
-	 * location's ranges — a property the generator asserts after rendering,
-	 * rather than assuming.
+	 * This is the surface form — a misspelling, an abbreviation, initials — so it
+	 * belongs to the occurrence rather than to the entity, and it is what a
+	 * report shows when naming what was planted.
 	 */
 	text: string;
+
+	/**
+	 * The value as the file actually carries it, escaping included.
+	 *
+	 * Equals {@link text} wherever the format escaped nothing, which is most of
+	 * the time. It differs for a `&` in XML element text or a quote inside a JSON
+	 * string: `Wright & Sons` reaches disk as `Wright &amp; Sons`, and it is
+	 * those wider bytes that {@link Occurrence.location} covers and a redactor
+	 * must overwrite.
+	 *
+	 * Recorded by the renderer, which is the only thing that knows — it applied
+	 * the escaping. Both are kept because they answer different questions: a
+	 * report names the value a person would recognise, while verifying the
+	 * answer key against the artifact needs the bytes that are really there.
+	 */
+	written: string;
 
 	/**
 	 * What a lossy channel actually produced, when it differs from

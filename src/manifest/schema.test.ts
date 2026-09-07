@@ -85,6 +85,7 @@ function validRecord(): unknown {
 				modalityId: "mod_1",
 				surface: "canonical",
 				text: "Dana Reyes",
+				written: "Dana Reyes",
 				location: { kind: "text", ranges: [{ start: 0, end: 10 }] },
 			},
 		],
@@ -228,6 +229,71 @@ describe("parseRecord", () => {
 		const record = parseRecord(validRecord());
 		expect(record.entities[0]?.label).toBe("person_name");
 		expect(record.provenance.renderer).toBe("ts:txt");
+	});
+
+	it("accepts a tabular answer key", () => {
+		// A third of the corpus is CSV, and a tabular value is addressed
+		// differently from a text one: by cell, plus a range inside it, plus the
+		// file bytes. All three have to survive being written and read back.
+		const record = parseRecord(
+			withRecord((r: never) => {
+				(r as { occurrences: unknown[] }).occurrences = [
+					{
+						id: "occ_1",
+						entityId: "ent_1",
+						modalityId: "mod_1",
+						surface: "canonical",
+						text: "Dana Reyes",
+						written: "Dana Reyes",
+						location: {
+							kind: "tabular",
+							row: 1,
+							column: 2,
+							columnName: "customer",
+							ranges: [{ start: 20, end: 30 }],
+							cell: { start: 0, end: 10 },
+						},
+					},
+				];
+			}),
+		);
+
+		const location = record.occurrences[0]?.location;
+		if (location?.kind !== "tabular") throw new Error("expected tabular");
+		expect(location.row).toBe(1);
+		expect(location.column).toBe(2);
+		expect(location.columnName).toBe("customer");
+		expect(location.cell).toEqual({ start: 0, end: 10 });
+		expect(location.ranges).toEqual([{ start: 20, end: 30 }]);
+	});
+
+	it("accepts a tabular location covering its whole cell", () => {
+		// How the API reports a detection over an entire cell: no offsets at all,
+		// the cell address being the whole answer.
+		const location = parseRecord(
+			withRecord((r: never) => {
+				(r as { occurrences: unknown[] }).occurrences = [
+					{
+						id: "occ_1",
+						entityId: "ent_1",
+						modalityId: "mod_1",
+						surface: "canonical",
+						text: "Dana Reyes",
+						written: "Dana Reyes",
+						location: {
+							kind: "tabular",
+							row: 1,
+							column: 2,
+							ranges: [{ start: 20, end: 30 }],
+						},
+					},
+				];
+			}),
+		).occurrences[0]?.location;
+
+		expect(location?.kind).toBe("tabular");
+		if (location?.kind !== "tabular") throw new Error("expected tabular");
+		expect(location.cell).toBeUndefined();
 	});
 
 	it("reads on its own, carrying its own version", () => {

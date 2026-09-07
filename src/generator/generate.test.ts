@@ -295,17 +295,17 @@ describe("runGenerate", () => {
 		expect(left, "the failing run left a staging directory behind").toBeNull();
 	});
 
-	it("generates a JSON record whose source ranges index the real file", async () => {
-		// The dual-coordinate model end to end: decoded ranges index the string a
-		// detector reads, source ranges index the bytes on disk, and escaping
-		// pulls the two apart.
+	it("generates a JSON record whose ranges index the real file", async () => {
+		// Escaping end to end. The planted alias carries quotes of its own, so the
+		// file holds a wider string than the value does and the range has to cover
+		// the wider one — what a redactor would need to overwrite.
 		const jsonSpec: RecordSpec = {
 			version: 1,
 			id: "json-case",
 			description: "A structured record with an escaped value.",
 			format: "json",
 			slots: [
-				{ name: "subject", label: "person_name" },
+				{ name: "subject", label: "person_name", value: 'Say "Ace" Delgado' },
 				{ name: "id", label: "government_id" },
 			],
 			template: "template.json",
@@ -320,7 +320,7 @@ describe("runGenerate", () => {
 		await writeFile(
 			join(dir, "template.json"),
 			JSON.stringify({
-				alias: 'Known as "Ace" {{subject}}',
+				alias: "Known as {{subject}}",
 				reference: "{{id}}",
 			}),
 			"utf8",
@@ -336,21 +336,19 @@ describe("runGenerate", () => {
 
 		expect(() => JSON.parse(file)).not.toThrow();
 
-		let shifted = 0;
+		let escaped = 0;
 		for (const occurrence of record.occurrences) {
 			if (occurrence.location.kind !== "text") continue;
-			const { source, ranges } = occurrence.location;
-			expect(source).toBeDefined();
 
-			const raw = (source ?? [])
+			const found = occurrence.location.ranges
 				.map((range) => sliceByteRange(file, range))
 				.join("");
-			expect(JSON.parse(`"${raw}"`)).toBe(occurrence.text);
+			expect(found).toBe(occurrence.written);
 
-			if ((source?.[0]?.start ?? 0) !== (ranges[0]?.start ?? 0)) shifted++;
+			if (occurrence.written !== occurrence.text) escaped++;
 		}
-		// The escaped quotes must have moved something.
-		expect(shifted).toBeGreaterThan(0);
+		// The spec plants a quoted value, so escaping must have widened something.
+		expect(escaped).toBeGreaterThan(0);
 	});
 
 	it("reports a missing specs directory", async () => {
