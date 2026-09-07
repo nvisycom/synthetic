@@ -50,6 +50,23 @@ export interface TextLocation {
 	 */
 	ranges: [Range, ...Range[]];
 
+	/**
+	 * Where the value sits in the raw file, when that differs from the decoded
+	 * text.
+	 *
+	 * Absent when the two coincide, which is the common case: in a plain text
+	 * file the bytes on disk *are* the decoded text. A structured format changes
+	 * that. In `{"alias": "Say \"hi\" Reyes"}` the planted `Reyes` sits at
+	 * decoded offset 9 but source offset 22, the difference being the escapes.
+	 *
+	 * Both matter, for different readers: a detector reads decoded text, so
+	 * scoring compares against {@link ranges}; a redactor overwrites bytes, so
+	 * boundary accuracy against the file uses these. Mirrors the SDK's
+	 * `DecodedSpan.source`, and is a list for the same reason — an escape falling
+	 * inside a value splits it across the raw bytes.
+	 */
+	source?: [Range, ...Range[]];
+
 	/** Zero-based page index, for paged formats. */
 	page?: number;
 }
@@ -102,6 +119,54 @@ export interface AudioLocation {
 }
 
 /**
+ * A cell in a tabular document, and where the value sits inside it.
+ *
+ * Tabular content gets its own coordinate system rather than an offset into a
+ * flattened document, because that is how a pipeline reads it: a CSV or
+ * spreadsheet is addressed by row and column, and a detection comes back naming
+ * a cell. Flattening here would mean translating on every comparison, and a
+ * translation in the middle of scoring is where an off-by-one hides.
+ *
+ * Mirrors the SDK's `TabularLocation`.
+ */
+export interface TabularLocation {
+	kind: "tabular";
+
+	/** Zero-based row index of the cell. */
+	row: number;
+
+	/** Zero-based column index of the cell. */
+	column: number;
+
+	/** Header label of the column, when the document has one. */
+	columnName?: string;
+
+	/** Sheet name, for a multi-sheet workbook. */
+	sheetName?: string;
+
+	/**
+	 * Byte range within the cell's own text.
+	 *
+	 * Absent when the value is the whole cell, which is the common case: a name
+	 * in a `customer` column occupies it entirely. Present when a value sits
+	 * inside a longer cell, such as an account number in a free-text note.
+	 *
+	 * Offsets index the cell's decoded text, so quoting and doubled quotes do
+	 * not shift them — the same decoded-versus-source split the text formats
+	 * make, resolved by addressing the cell rather than the file.
+	 */
+	range?: Range;
+
+	/**
+	 * Where the cell's value sits in the raw file.
+	 *
+	 * Absent when the two coincide. Present when the cell was quoted, since the
+	 * quotes and any doubled quotes shift the bytes a redactor must overwrite.
+	 */
+	source?: [Range, ...Range[]];
+}
+
+/**
  * Where a value sits within a modality.
  *
  * The three coordinate systems stay separate rather than collapsing into one
@@ -109,7 +174,11 @@ export interface AudioLocation {
  * time intervals are different computations, and conflating them is how
  * boundary scoring quietly goes wrong.
  */
-export type Location = TextLocation | ImageLocation | AudioLocation;
+export type Location =
+	| TextLocation
+	| ImageLocation
+	| AudioLocation
+	| TabularLocation;
 
 /**
  * Returns the total extent a location covers, in its own units.
@@ -132,5 +201,11 @@ export function extentOf(location: Location): number {
 			);
 		case "audio":
 			return location.span.end - location.span.start;
+		case "tabular":
+			// A whole-cell location has no range of its own; its extent is the
+			// cell, which the caller knows and this function does not.
+			return location.range === undefined
+				? 0
+				: location.range.end - location.range.start;
 	}
 }

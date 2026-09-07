@@ -20,6 +20,7 @@ import { recordPath } from "#/manifest/layout.ts";
 import { writeManifest, writeRecord } from "#/manifest/write.ts";
 import { Random } from "#/random.ts";
 import { GeneratorError, generateRecord, validateSpec } from "./record.ts";
+import { loaderFor, templateFilename } from "./render/load.ts";
 import { parseSpec } from "./spec.schema.ts";
 import type { LoadedSpec } from "./spec.ts";
 
@@ -81,14 +82,32 @@ async function loadSpecs(dataDir: string): Promise<LoadedSpec[]> {
 		// file that is wrong rather than surface three steps downstream.
 		const spec = parseSpec(raw, specPath);
 
-		const templatePath = join(specsDir, dir, spec.template ?? "template.txt");
-		let template: string;
+		// Each format stores its template in the shape its documents have, so the
+		// filename and the parsing both come from the format.
+		const filename = spec.template ?? templateFilename(spec.format);
+		const templatePath = join(specsDir, dir, filename);
+
+		let contents: string;
 		try {
-			template = await readFile(templatePath, "utf8");
+			contents = await readFile(templatePath, "utf8");
 		} catch {
 			throw new GeneratorError(
 				`Spec ${JSON.stringify(spec.id)} names a template at ${templatePath}, which does not exist`,
 			);
+		}
+
+		const load = loaderFor(spec.format);
+		if (load === undefined) {
+			throw new GeneratorError(
+				`Spec ${JSON.stringify(spec.id)} uses format ${JSON.stringify(spec.format)}, which has no template loader`,
+			);
+		}
+
+		let template: unknown;
+		try {
+			template = load(contents, templatePath);
+		} catch (cause) {
+			throw new GeneratorError((cause as Error).message);
 		}
 
 		const loaded = { spec, template };

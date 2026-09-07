@@ -20,7 +20,8 @@ import type { Occurrence } from "#/datatypes/record.ts";
 import { byteLength } from "#/util/offset.ts";
 
 /** `{{slot}}` or `{{slot:surface}}`. */
-const PLACEHOLDER = /\{\{\s*([a-zA-Z0-9_-]+)\s*(?::\s*([a-zA-Z_]+)\s*)?\}\}/g;
+export const PLACEHOLDER =
+	/\{\{\s*([a-zA-Z0-9_-]+)\s*(?::\s*([a-zA-Z_]+)\s*)?\}\}/g;
 
 /**
  * What a template produced.
@@ -38,6 +39,42 @@ export interface Planted {
  */
 export class TemplateError extends Error {
 	override readonly name = "TemplateError";
+}
+
+/**
+ * Looks up the value a placeholder asks for.
+ *
+ * Shared by every renderer, so a template means the same thing whatever format
+ * it is written into.
+ *
+ * @throws {TemplateError} If the slot is unknown, or lacks the requested form
+ */
+export function resolveSlot(
+	entities: ReadonlyMap<string, Entity>,
+	name: string | undefined,
+	requested: string | undefined,
+): { entity: Entity; surface: SurfaceForm; value: string } {
+	if (name === undefined) {
+		throw new TemplateError("Malformed placeholder");
+	}
+
+	const entity = entities.get(name);
+	if (entity === undefined) {
+		throw new TemplateError(
+			`Template references slot ${JSON.stringify(name)}, which the spec does not define`,
+		);
+	}
+
+	const surface = (requested ?? "canonical") as SurfaceForm;
+	const value =
+		surface === "canonical" ? entity.value : entity.variants?.[surface];
+	if (value === undefined) {
+		throw new TemplateError(
+			`Slot ${JSON.stringify(name)} has no ${JSON.stringify(surface)} form; declare it in the spec's surfaces`,
+		);
+	}
+
+	return { entity, surface, value };
 }
 
 /**
@@ -66,29 +103,12 @@ export function plant(
 	let match = PLACEHOLDER.exec(body);
 	while (match !== null) {
 		const [placeholder, name, requested] = match;
-		if (name === undefined) {
-			throw new TemplateError(`Malformed placeholder ${placeholder}`);
-		}
 
 		const literal = body.slice(last, match.index);
 		text += literal;
 		bytes += byteLength(literal);
 
-		const entity = entities.get(name);
-		if (entity === undefined) {
-			throw new TemplateError(
-				`Template references slot ${JSON.stringify(name)}, which the spec does not define`,
-			);
-		}
-
-		const surface = (requested ?? "canonical") as SurfaceForm;
-		const value =
-			surface === "canonical" ? entity.value : entity.variants?.[surface];
-		if (value === undefined) {
-			throw new TemplateError(
-				`Slot ${JSON.stringify(name)} has no ${JSON.stringify(surface)} form; declare it in the spec's surfaces`,
-			);
-		}
+		const { entity, surface, value } = resolveSlot(entities, name, requested);
 
 		const start = bytes;
 		text += value;

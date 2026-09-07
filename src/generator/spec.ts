@@ -43,6 +43,21 @@ export interface SlotSpec {
 	surfaces?: SurfaceForm[];
 
 	/**
+	 * Whether the pipeline is expected to find this value.
+	 *
+	 * `ignored` plants a value that must survive un-redacted: a catalog number
+	 * shaped like an account, a bare figure with no keyword to vouch for it.
+	 * These are the precision half of the benchmark — a detection here is a false
+	 * positive, and over-redaction is what ruins a document's utility.
+	 *
+	 * Ignored slots are excluded from recall, so a corpus without them can only
+	 * measure how much a pipeline finds, never how much it wrongly takes.
+	 *
+	 * @default "detected"
+	 */
+	expect?: "detected" | "ignored";
+
+	/**
 	 * Marks this slot as deliberately hard, and says why.
 	 *
 	 * Reported as its own cohort, so a headline score is not propped up by easy
@@ -106,12 +121,12 @@ export interface LoadedSpec {
 	spec: RecordSpec;
 
 	/**
-	 * The template body, read from its own file.
+	 * The loaded template, in whatever shape its format's loader produced.
 	 *
-	 * Plain text with `{{slot}}` placeholders, and `{{slot:surface}}` to write a
-	 * slot in a particular form. Everything outside a placeholder is literal, so
-	 * an author controls exactly where values land — including whether one
-	 * straddles a line break.
+	 * A string for `txt`; parsed JSON for `json`. Placeholders are written
+	 * `{{slot}}`, or `{{slot:surface}}` to write a slot in a particular form.
+	 * Everything outside a placeholder is literal, so an author controls exactly
+	 * where values land — including whether one straddles a line break.
 	 */
-	template: string;
+	template: unknown;
 }

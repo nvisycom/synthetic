@@ -58,6 +58,9 @@ export const TextLocationSchema = z.strictObject({
 	ranges: z.array(RangeSchema).nonempty() as unknown as z.ZodType<
 		[Range, ...Range[]]
 	>,
+	source: (
+		z.array(RangeSchema).nonempty() as unknown as z.ZodType<[Range, ...Range[]]>
+	).optional(),
 	page: offset.optional(),
 });
 
@@ -78,10 +81,23 @@ export const AudioLocationSchema = z.strictObject({
 	speaker: z.string().min(1).optional(),
 });
 
+export const TabularLocationSchema = z.strictObject({
+	kind: z.literal("tabular"),
+	row: offset,
+	column: offset,
+	columnName: z.string().min(1).optional(),
+	sheetName: z.string().min(1).optional(),
+	range: RangeSchema.optional(),
+	source: (
+		z.array(RangeSchema).nonempty() as unknown as z.ZodType<[Range, ...Range[]]>
+	).optional(),
+});
+
 export const LocationSchema = z.discriminatedUnion("kind", [
 	TextLocationSchema,
 	ImageLocationSchema,
 	AudioLocationSchema,
+	TabularLocationSchema,
 ]);
 
 /**
@@ -102,6 +118,7 @@ export const EntitySchema = z.strictObject({
 	label: LabelSchema,
 	value: z.string().min(1),
 	variants: z.partialRecord(z.enum(SURFACE_FORMS), z.string()).optional(),
+	expect: z.enum(["detected", "ignored"]).optional(),
 	adversarial: z.enum(ADVERSARIAL_KINDS).optional(),
 	note: z.string().optional(),
 });
