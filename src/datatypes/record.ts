@@ -62,6 +62,7 @@ export const DOCUMENT_FORMATS = [
 	// Audio.
 	"wav",
 	"mp3",
+	"ogg",
 ] as const;
 
 /**

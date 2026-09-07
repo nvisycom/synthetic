@@ -84,22 +84,18 @@ comparable across runs if the specifications and seed that produced it are.
 npm install
 ```
 
-Build a corpus from the tracked specifications, then score a pipeline's
-output against it:
+Build a corpus from the tracked specifications:
 
 ```bash
 synthetic generate --seed 42 --out ./corpus
-synthetic score --corpus ./corpus --output ./runs/latest
 ```
 
-`bench` does both in one step, submitting the corpus to a live pipeline:
+The seed is required rather than defaulted, because a score is only meaningful
+alongside the corpus that produced it, and `--seed 42` is the whole record of
+which corpus that was.
 
-```bash
-synthetic bench --corpus ./corpus
-```
-
-The seed is required rather than defaulted, because a score is only
-meaningful alongside the corpus that produced it.
+`score` and `bench` are declared but not implemented yet; so far only `txt`
+records render.
 
 ## Project
 

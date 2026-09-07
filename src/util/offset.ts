@@ -37,6 +37,21 @@ export function toByteOffset(text: string, index: number): number {
 			`Index ${index} is outside a string of length ${text.length}`,
 		);
 	}
+
+	// An index between the halves of a surrogate pair is not a character
+	// boundary. `slice` would silently cut the pair, yielding a byte offset that
+	// points inside a character — a span that looks valid and covers the wrong
+	// bytes, which is precisely the corruption this module exists to prevent.
+	if (index > 0 && index < text.length) {
+		const high = text.charCodeAt(index - 1);
+		const low = text.charCodeAt(index);
+		if (high >= 0xd800 && high <= 0xdbff && low >= 0xdc00 && low <= 0xdfff) {
+			throw new RangeError(
+				`Index ${index} falls between the halves of a surrogate pair, not on a character boundary`,
+			);
+		}
+	}
+
 	return byteLength(text.slice(0, index));
 }
 

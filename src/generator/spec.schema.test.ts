@@ -200,6 +200,24 @@ describe("strictness", () => {
 		);
 	});
 
+	it("rejects a template path that escapes the spec directory", () => {
+		for (const template of ["../../etc/passwd", "sub/template.txt", ".."]) {
+			expectRejected(
+				broken((spec: never) => {
+					(spec as { template?: string }).template = template;
+				}),
+				/Template must/,
+			);
+		}
+	});
+
+	it("accepts a plain template filename", () => {
+		const spec = broken((draft: never) => {
+			(draft as { template?: string }).template = "letter.txt";
+		});
+		expect(() => parseSpec(spec, "spec.json")).not.toThrow();
+	});
+
 	it("requires an id usable as a directory name", () => {
 		expectRejected(
 			broken((spec: never) => {

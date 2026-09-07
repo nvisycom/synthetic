@@ -1,4 +1,11 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -145,6 +152,19 @@ describe("validation on write", () => {
 		await writeManifest(corpus, broken).catch(() => {});
 		// Validation happens before any file is opened, so nothing is created.
 		await expect(readFile(join(corpus, MANIFEST_FILE))).rejects.toThrow();
+	});
+
+	it("leaves no temporary file behind when the write itself fails", async () => {
+		// A stranded `.tmp` sits beside the real file, where a later run's
+		// directory listing picks it up as corpus content. Force a rename failure
+		// by making the destination a directory.
+		await mkdir(join(corpus, MANIFEST_FILE), { recursive: true });
+		await writeManifest(corpus, manifest("b".repeat(64))).catch(() => {});
+
+		const left = (await readdir(corpus)).filter((name) =>
+			name.endsWith(".tmp"),
+		);
+		expect(left).toEqual([]);
 	});
 });
 

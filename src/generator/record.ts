@@ -43,6 +43,15 @@ export function validateSpec(loaded: LoadedSpec): void {
 	const declared = new Set(spec.slots.map((slot) => slot.name));
 	const problems: string[] = [];
 
+	if (spec.format !== "txt") {
+		// Only the text renderer exists. Accepting another format would write
+		// plain text into a `document.pdf` and record it as a valid PDF record —
+		// a corpus that looks generated and is not.
+		problems.push(
+			`format ${JSON.stringify(spec.format)} has no renderer yet; only "txt" is supported`,
+		);
+	}
+
 	for (const slot of spec.slots) {
 		if (slot.value === undefined && !isFabricable(slot.label)) {
 			// Planting a placeholder no detector would recognize would score as a

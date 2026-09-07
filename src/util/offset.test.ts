@@ -50,6 +50,13 @@ describe("toByteOffset", () => {
 		expect(toByteOffset(EMOJI, 3)).toBe(5);
 	});
 
+	it("rejects an index between the halves of a surrogate pair", () => {
+		// Index 2 sits inside "👍". Slicing there cuts the pair and yields a byte
+		// offset pointing inside a character — a span that looks valid and covers
+		// the wrong bytes.
+		expect(() => toByteOffset(EMOJI, 2)).toThrow(/surrogate pair/);
+	});
+
 	it("rejects an out-of-range index", () => {
 		expect(() => toByteOffset(ASCII, 6)).toThrow(RangeError);
 		expect(() => toByteOffset(ASCII, -1)).toThrow(RangeError);

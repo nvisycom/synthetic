@@ -200,6 +200,18 @@ describe("Random", () => {
 			);
 		});
 
+		it("rejects weights that overflow to Infinity when summed", () => {
+			// Each weight is finite, but the total is not. `float() * Infinity` is
+			// Infinity, so every comparison fails and the last item wins whatever
+			// its weight.
+			expect(() =>
+				Random.fromSeed(1).weighted(
+					["a", "b"],
+					[Number.MAX_VALUE, Number.MAX_VALUE],
+				),
+			).toThrow(RangeError);
+		});
+
 		it("rejects weights summing to zero", () => {
 			expect(() => Random.fromSeed(1).weighted(["a", "b"], [0, 0])).toThrow(
 				RangeError,

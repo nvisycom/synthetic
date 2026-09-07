@@ -4,7 +4,14 @@
  * @module generator/generate
  */
 
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	readdir,
+	readFile,
+	rename,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { version } from "#/config.ts";
 import type { Manifest, RecordEntry } from "#/datatypes/record.ts";
@@ -107,50 +114,74 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 	const specs = await loadSpecs(options.data);
 	logger.info("loaded specs", { count: specs.length, from: options.data });
 
-	const root = Random.fromSeed(seed);
-	const entries: RecordEntry[] = [];
+	// Generated into a staging directory and published by a single rename, so a
+	// failure partway through cannot leave a corpus whose manifest and records
+	// come from different runs — which validates cleanly while pairing every
+	// answer key with the wrong artifact.
+	const staging = `${options.out}.staging`;
+	await rm(staging, { recursive: true, force: true });
 
-	for (let index = 0; index < count; index++) {
-		// Each record draws from its own stream, so changing one record — or the
-		// number of them — leaves every other record byte-identical.
-		const stream = root.fork();
-		const recordSeed = stream.integer(0, Number.MAX_SAFE_INTEGER);
+	try {
+		const root = Random.fromSeed(seed);
+		const entries: RecordEntry[] = [];
 
-		const loaded = specs[index % specs.length];
-		if (loaded === undefined)
-			throw new GeneratorError("No spec to generate from");
+		for (let index = 0; index < count; index++) {
+			// Each record draws from its own stream, so changing one record — or the
+			// number of them — leaves every other record byte-identical.
+			const stream = root.fork();
+			const recordSeed = stream.integer(0, Number.MAX_SAFE_INTEGER);
 
-		const id = `rec_${String(index + 1).padStart(4, "0")}`;
-		const { record, artifact } = generateRecord(loaded, id, stream, recordSeed);
+			const loaded = specs[index % specs.length];
+			if (loaded === undefined)
+				throw new GeneratorError("No spec to generate from");
 
-		const path = recordPath(id);
-		await mkdir(join(options.out, path), { recursive: true });
-		await writeFile(join(options.out, path, record.artifact), artifact, "utf8");
-		await writeRecord(options.out, path, record);
+			const id = `rec_${String(index + 1).padStart(4, "0")}`;
+			const { record, artifact } = generateRecord(
+				loaded,
+				id,
+				stream,
+				recordSeed,
+			);
 
-		entries.push({
-			id,
-			format: record.format,
-			specId: record.specId,
-			path,
-			digest: record.digest,
+			const path = recordPath(id);
+			await mkdir(join(staging, path), { recursive: true });
+			await writeFile(join(staging, path, record.artifact), artifact, "utf8");
+			await writeRecord(staging, path, record);
+
+			entries.push({
+				id,
+				format: record.format,
+				specId: record.specId,
+				path,
+				digest: record.digest,
+			});
+
+			logger.debug("generated record", { id, spec: loaded.spec.id });
+		}
+
+		const manifest: Manifest = {
+			version: 1,
+			seed,
+			generator: version,
+			createdAt: new Date().toISOString(),
+			records: entries,
+		};
+		await writeManifest(staging, manifest);
+
+		// Publish. The previous corpus is replaced only once every record and the
+		// manifest are on disk.
+		await rm(options.out, { recursive: true, force: true });
+		await rename(staging, options.out);
+
+		logger.success("generated corpus", {
+			records: entries.length,
+			seed,
+			out: options.out,
 		});
-
-		logger.debug("generated record", { id, spec: loaded.spec.id });
+	} catch (cause) {
+		// Leave nothing half-written behind for the next run's directory listing
+		// to mistake for corpus content.
+		await rm(staging, { recursive: true, force: true });
+		throw cause;
 	}
-
-	const manifest: Manifest = {
-		version: 1,
-		seed,
-		generator: version,
-		createdAt: new Date().toISOString(),
-		records: entries,
-	};
-	await writeManifest(options.out, manifest);
-
-	logger.success("generated corpus", {
-		records: entries.length,
-		seed,
-		out: options.out,
-	});
 }

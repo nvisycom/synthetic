@@ -379,6 +379,28 @@ export function isFabricable(label: Label): boolean {
 }
 
 /**
+ * Splits a person name into given and family parts.
+ *
+ * Handles both orders a document uses: "Dana Reyes" and "Reyes, Dana". Every
+ * derived form works from the normalized pair, so the inverted order does not
+ * produce an initial taken from the surname or a comma inside an email address.
+ */
+function nameParts(
+	value: string,
+): { given: string; family: string } | undefined {
+	const inverted = value.indexOf(",");
+	if (inverted !== -1) {
+		const family = value.slice(0, inverted).trim();
+		const given = value.slice(inverted + 1).trim();
+		return family && given ? { given, family } : undefined;
+	}
+
+	const parts = value.split(/\s+/).filter(Boolean);
+	if (parts.length < 2) return undefined;
+	return { given: parts[0] as string, family: parts.at(-1) as string };
+}
+
+/**
  * Derives alternative renderings of a value.
  *
  * The point of surfaces: one person written six ways is one subject, and a
@@ -397,12 +419,10 @@ function deriveVariant(
 
 		case "abbreviated": {
 			if (label !== "person_name") return undefined;
-			const parts = value.split(" ");
-			const first = parts[0];
-			const last = parts.at(-1);
-			if (!first || !last || parts.length < 2) return undefined;
+			const parts = nameParts(value);
+			if (!parts) return undefined;
 			// "Dana Reyes" becomes "D. Reyes".
-			return `${first[0]}. ${last}`;
+			return `${parts.given[0]}. ${parts.family}`;
 		}
 
 		case "misspelled": {
@@ -412,7 +432,7 @@ function deriveVariant(
 			// misspelled surface testing word segmentation rather than fuzzy
 			// matching.
 			const positions: number[] = [];
-			for (let i = 1; i < value.length - 2; i++) {
+			for (let i = 1; i < value.length - 1; i++) {
 				if (
 					/[a-zA-Z]/.test(value[i] ?? "") &&
 					/[a-zA-Z]/.test(value[i + 1] ?? "")
@@ -447,20 +467,23 @@ function deriveVariant(
 
 		case "signature": {
 			if (label !== "person_name") return undefined;
-			const parts = value.split(" ");
-			if (parts.length < 2) return undefined;
+			const parts = nameParts(value);
+			if (!parts) return undefined;
 			// Initials, as they would appear in a signature block.
-			return parts.map((part) => part[0]).join(".") + ".";
+			return `${parts.given[0]}.${parts.family[0]}.`;
 		}
 
 		case "embedded": {
 			if (label !== "person_name") return undefined;
-			const parts = value.toLowerCase().split(" ");
-			const first = parts[0];
-			const last = parts.at(-1);
-			if (!first || !last || parts.length < 2) return undefined;
+			const parts = nameParts(value);
+			if (!parts) return undefined;
 			// The name inside an email address, which pattern matchers miss.
-			return `${first}.${last}@example.com`;
+			// Normalized first, so an inverted name does not leave a comma in the
+			// local part and produce an address no detector should match.
+			const local = `${parts.given}.${parts.family}`
+				.toLowerCase()
+				.replace(/[^a-z0-9.]/g, "");
+			return `${local}@example.com`;
 		}
 
 		// Applied by a renderer's lossy channel, not derivable here.

@@ -17,7 +17,7 @@
  * @module manifest/write
  */
 
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { CorpusRecord, Manifest } from "#/datatypes/record.ts";
 import { MANIFEST_FILE, TRUTH_FILE } from "./layout.ts";
@@ -34,8 +34,16 @@ async function writeAtomic(path: string, contents: string): Promise<void> {
 
 	// The pid keeps two concurrent generators from colliding on the temp name.
 	const temporary = `${path}.${process.pid}.tmp`;
-	await writeFile(temporary, contents, "utf8");
-	await rename(temporary, path);
+	try {
+		await writeFile(temporary, contents, "utf8");
+		await rename(temporary, path);
+	} catch (cause) {
+		// A failed write would otherwise strand its temp file beside the real
+		// one, where a later run's directory listing picks it up as corpus
+		// content. Best-effort: the original failure is what matters.
+		await rm(temporary, { force: true }).catch(() => {});
+		throw cause;
+	}
 }
 
 /**

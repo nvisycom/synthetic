@@ -183,6 +183,50 @@ describe("surface forms", () => {
 		}
 	});
 
+	it("derives the same forms from either name order", () => {
+		// "Reyes, Dana" used to take the initial from the surname and leave a
+		// comma in the email local part, producing an address no detector should
+		// be expected to match.
+		const direct = fabricate(
+			"ent_1",
+			"person_name",
+			["canonical", "abbreviated", "signature", "embedded"],
+			random,
+			"Dana Reyes",
+		);
+		const inverted = fabricate(
+			"ent_1",
+			"person_name",
+			["canonical", "abbreviated", "signature", "embedded"],
+			random,
+			"Reyes, Dana",
+		);
+
+		expect(inverted.variants?.abbreviated).toBe(direct.variants?.abbreviated);
+		expect(inverted.variants?.signature).toBe(direct.variants?.signature);
+		expect(inverted.variants?.embedded).toBe(direct.variants?.embedded);
+		expect(inverted.variants?.embedded).not.toContain(",");
+	});
+
+	it("can transpose the final letter pair", () => {
+		// The loop bound excluded the last valid pair, so the end of a value was
+		// never misspelled.
+		const seen = new Set<string>();
+		for (let index = 0; index < 300; index++) {
+			faker.seed(index);
+			seen.add(
+				fabricate(
+					"ent_1",
+					"person_name",
+					["canonical", "misspelled"],
+					random,
+					"Dana Reye",
+				).variants?.misspelled ?? "",
+			);
+		}
+		expect([...seen].some((value) => value.endsWith("Reey"))).toBe(true);
+	});
+
 	it("omits a form the value cannot take", () => {
 		// An API key has no meaningful abbreviation, and inventing one would
 		// plant a value no detector should be expected to link back.

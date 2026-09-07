@@ -70,7 +70,21 @@ export const RecordSpecSchema = z
 		description: z.string().min(1),
 		format: z.enum(DOCUMENT_FORMATS),
 		slots: z.array(SlotSpecSchema).nonempty(),
-		template: z.string().min(1).optional(),
+		// A bare filename, resolved inside the spec's own directory. A path is
+		// rejected outright rather than resolved and checked, since a spec has no
+		// reason to reach outside its folder and the narrow rule is the one that
+		// cannot be worked around.
+		template: z
+			.string()
+			.min(1)
+			.regex(
+				/^[a-zA-Z0-9._-]+$/,
+				"Template must be a filename in the spec's own directory, not a path",
+			)
+			.refine((name) => name !== "." && name !== "..", {
+				message: "Template must name a file",
+			})
+			.optional(),
 	})
 	.superRefine((spec, ctx) => {
 		const seen = new Set<string>();

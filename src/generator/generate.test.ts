@@ -238,6 +238,46 @@ describe("runGenerate", () => {
 		await expect(runGenerate(options({ records: "1" }))).resolves.not.toThrow();
 	});
 
+	it("refuses a format that has no renderer", async () => {
+		// Accepting one would write plain text into a document.pdf and record it
+		// as a valid PDF record — a corpus that looks generated and is not.
+		await writeSpec({ ...SPEC, format: "pdf" });
+		await expect(runGenerate(options())).rejects.toThrow(/no renderer/);
+	});
+
+	it("leaves an existing corpus untouched when generation fails", async () => {
+		// Without staging, a failure partway through leaves a manifest from one
+		// run beside records from another: a corpus that validates cleanly while
+		// pairing every answer key with the wrong artifact.
+		await writeSpec();
+		await runGenerate(options({ seed: "1", records: "3" }));
+		const before = await readFile(
+			join(out, "records/rec_0001/document.txt"),
+			"utf8",
+		);
+
+		// A template referencing a surface the spec does not declare fails inside
+		// the generation loop, after the first records are already written.
+		await writeSpec(SPEC, `${TEMPLATE}{{subject:misspelled}}\n`);
+		await expect(
+			runGenerate(options({ seed: "2", records: "3" })),
+		).rejects.toThrow();
+
+		const manifest = await readManifest(out);
+		expect(manifest.seed).toBe(1);
+		expect(
+			await readFile(join(out, "records/rec_0001/document.txt"), "utf8"),
+		).toBe(before);
+	});
+
+	it("leaves no staging directory behind after a failure", async () => {
+		await writeSpec(SPEC, `${TEMPLATE}{{subject:misspelled}}\n`);
+		await expect(runGenerate(options())).rejects.toThrow();
+		await expect(
+			readFile(join(`${out}.staging`, "manifest.json")),
+		).rejects.toThrow();
+	});
+
 	it("reports a missing specs directory", async () => {
 		await expect(runGenerate(options())).rejects.toThrow(/No specs/);
 	});

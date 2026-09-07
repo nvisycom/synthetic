@@ -179,6 +179,14 @@ export class Random {
 		if (total === 0) {
 			throw new RangeError("Weights must not sum to zero");
 		}
+		if (!Number.isFinite(total)) {
+			// Individually finite weights can still overflow to Infinity when
+			// summed. `float() * Infinity` is Infinity, so every comparison below
+			// fails and the last item wins regardless of its weight.
+			throw new RangeError(
+				`Weights sum to ${total}, which cannot be sampled from`,
+			);
+		}
 
 		let remaining = this.float() * total;
 		for (let i = 0; i < items.length; i++) {

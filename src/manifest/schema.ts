@@ -139,7 +139,7 @@ export const ModalitySchema = z.strictObject({
  */
 export const ProvenanceSchema = z.strictObject({
 	renderer: z.string().min(1),
-	seed: z.number().int().safe(),
+	seed: z.number().int(),
 	transforms: z.array(z.string().min(1)).optional(),
 });
 
@@ -165,7 +165,7 @@ export const ManifestSchema = z
 		// A single supported version, refused rather than migrated. Guessing at
 		// an unknown layout is exactly the failure this file exists to prevent.
 		version: z.literal(1),
-		seed: z.number().int().safe(),
+		seed: z.number().int(),
 		generator: z.string().min(1),
 		createdAt: z.iso.datetime(),
 		records: z.array(RecordEntrySchema),
