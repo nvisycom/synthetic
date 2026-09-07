@@ -34,6 +34,12 @@ runs/
 # run, but a killed process can strand one.
 *.staging/
 
+# Python
+.venv/
+__pycache__/
+.ruff_cache/
+__marimo__/
+
 # Environment
 .env*
 !.env.example

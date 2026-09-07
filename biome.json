@@ -16,7 +16,9 @@
 			"!.claude",
 			"!corpus",
 			"!*.staging",
-			"!runs"
+			"!runs",
+			"!**/.venv",
+			"!notebooks"
 		]
 	},
 	"formatter": {
