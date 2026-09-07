@@ -60,6 +60,19 @@ render-job contract, where that ecosystem is markedly stronger. Ground truth is
 never taken on a renderer's word: planted values are verified against the
 artifact actually produced.
 
+## Layout
+
+| Path      | Holds                                                   | Tracked |
+| --------- | ------------------------------------------------------- | ------- |
+| `data/`   | Entity dictionaries, record specifications, adversarial cases | Yes |
+| `corpus/` | Rendered documents and their ground-truth manifest      | No      |
+| `runs/`   | Redaction output and scored reports                     | No      |
+
+Only `data/` is source. A corpus is reproducible from it plus a seed, and a
+run from a corpus, so neither is committed — rendered scans and audio reach
+gigabytes. That split is also what pins a benchmark: a score is only
+comparable across runs if the specifications and seed that produced it are.
+
 ## Requirements
 
 - Node.js 24.0.0 or higher
@@ -69,8 +82,24 @@ artifact actually produced.
 
 ```bash
 npm install
-npm start
 ```
+
+Build a corpus from the tracked specifications, then score a pipeline's
+output against it:
+
+```bash
+synthetic generate --seed 42 --out ./corpus
+synthetic score --corpus ./corpus --output ./runs/latest
+```
+
+`bench` does both in one step, submitting the corpus to a live pipeline:
+
+```bash
+synthetic bench --corpus ./corpus
+```
+
+The seed is required rather than defaulted, because a score is only
+meaningful alongside the corpus that produced it.
 
 ## Project
 

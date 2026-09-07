@@ -1,0 +1,34 @@
+# Corpus specifications
+
+Tracked inputs the corpus is built from. Small, reviewable, and versioned: these
+files are the benchmark's source of truth, and a change here changes what every
+score means.
+
+```
+synthetic generate --data ./data --seed 42 --out ./corpus
+```
+
+## What belongs here
+
+- **Entity dictionaries** — the pools that fabricated names, addresses, and
+  identifiers are drawn from.
+- **Record specifications** — the document shapes to generate, which entity
+  types each carries, and in what formats and modalities.
+- **Adversarial cases** — hand-written cases worth pinning: names colliding with
+  common words, one person written six ways, order numbers shaped like SSNs.
+  These are the values most likely to expose a regression, so they are curated
+  rather than sampled.
+
+Everything here is fabricated. No file in this directory may contain a real
+person's data, a real account number, or anything derived from a customer
+document.
+
+## What does not belong here
+
+Rendered output. `corpus/` holds the generated documents and their ground-truth
+manifest, and `runs/` the redaction output and reports; both are gitignored.
+They are reproducible from this directory plus a seed, and rendered scans and
+audio reach gigabytes.
+
+That reproducibility is the reason for the split: a corpus is a build artifact,
+and the seed plus these specifications are what actually pin a benchmark run.

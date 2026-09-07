@@ -22,8 +22,10 @@ dist/
 build/
 output/
 
-# Generated corpora and benchmark runs. Both are reproducible from a seed and
-# a manifest, and a full corpus is far too large to track.
+# Rendered corpora and benchmark runs. Both are derived: a corpus is
+# reproducible from the tracked specifications in data/ plus a seed, and a
+# run from a corpus. Rendered scans and audio reach gigabytes, so neither
+# belongs in git.
 corpus/
 runs/
 
