@@ -1,0 +1,57 @@
+version: 2
+updates:
+  # Enable version updates for npm
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      timezone: "Europe/Berlin"
+      day: "monday"
+      time: "04:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "chore"
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    rebase-strategy: "auto"
+    versioning-strategy: "increase"
+    # Group patch and minor updates together to reduce PR noise
+    groups:
+      # vitest and its companion packages share a strict peer dependency and
+      # must move together, majors included, or npm ci fails on the mismatch.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
+      npm-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      timezone: "Europe/Berlin"
+      day: "monday"
+      time: "04:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "chore"
+      - "dependencies"
+    commit-message:
+      prefix: "chore(actions)"
+    # Group all GitHub Actions updates together to reduce PR noise
+    groups:
+      github-actions:
+        patterns:
+          - "*"
