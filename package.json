@@ -29,6 +29,9 @@
 	"bin": {
 		"synthetic": "./dist/main.js"
 	},
+	"imports": {
+		"#/*": "./src/*"
+	},
 	"scripts": {
 		"start": "node --experimental-strip-types src/main.ts",
 		"build": "tsdown",
