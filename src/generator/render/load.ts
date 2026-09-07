@@ -35,13 +35,13 @@ const LOADERS: Partial<Record<DocumentFormat, TemplateLoader>> = {
 	// itself — which is what lets it record where each escape moved a value.
 	json: (contents, path) => parseJson(contents, path),
 
-	// A CSV template is itself CSV, so a table reads as a table and a diff shows
-	// a changed row. The renderer quotes cells again on output, since a planted
-	// value may introduce a comma the template never had.
 	// An XML template describes the tree as JSON, so the structure is explicit
 	// rather than parsed back out of angle brackets.
 	xml: (contents, path) => parseJson(contents, path),
 
+	// A CSV template is itself CSV, so a table reads as a table and a diff shows
+	// a changed row. The renderer quotes cells again on output, since a planted
+	// value may introduce a comma the template never had.
 	csv: (contents, path) => {
 		try {
 			return parseCsv(contents);

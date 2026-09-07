@@ -19,7 +19,13 @@ import type { Entity, SurfaceForm } from "#/datatypes/entity.ts";
 import type { Occurrence } from "#/datatypes/record.ts";
 import { byteLength } from "#/util/offset.ts";
 
-/** `{{slot}}` or `{{slot:surface}}`. */
+/**
+ * `{{slot}}` or `{{slot:surface}}`.
+ *
+ * Global, and therefore stateful: every caller must reset `lastIndex` before
+ * using it. {@link hasPlaceholder} exists so a one-off test does not have to
+ * remember that, since forgetting leaves the next scan starting mid-string.
+ */
 export const PLACEHOLDER =
 	/\{\{\s*([a-zA-Z0-9_-]+)\s*(?::\s*([a-zA-Z_]+)\s*)?\}\}/g;
 
@@ -39,6 +45,17 @@ export interface Planted {
  */
 export class TemplateError extends Error {
 	override readonly name = "TemplateError";
+}
+
+/**
+ * Returns whether a string carries a placeholder.
+ *
+ * Resets the shared pattern first, so a caller cannot be caught out by where a
+ * previous scan happened to stop.
+ */
+export function hasPlaceholder(text: string): boolean {
+	PLACEHOLDER.lastIndex = 0;
+	return PLACEHOLDER.test(text);
 }
 
 /**

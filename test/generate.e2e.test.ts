@@ -22,6 +22,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CorpusRecord, Manifest } from "#/datatypes/record.ts";
@@ -29,7 +30,7 @@ import type { CorpusRecord, Manifest } from "#/datatypes/record.ts";
 const run = promisify(execFile);
 
 /** The repository root, from this file's location. */
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 /** Enough records that every spec is used at least once. */
 const RECORDS = 22;

@@ -1,7 +1,7 @@
 {
 	"version": 1,
 	"id": "context-window",
-	"description": "Context boosting reaches only so far. A keyword lifts a weak value's score when it sits within a few words, and not beyond that. The same ambiguous number appears three times: beside its keyword, far from it, and with no keyword at all. Paired with weak-without-context.",
+	"description": "Context boosting reaches only so far. A keyword lifts a weak value's score when it sits within a few words, and not beyond that. Three ambiguous account numbers of the same shape appear: one beside its keyword, one with the keyword pushed well outside the window, and one with no keyword at all. Two strong values sit alongside them as a control, since they carry enough shape to be detected without any context. Paired with weak-without-context.",
 	"format": "txt",
 	"slots": [
 		{
@@ -27,7 +27,13 @@
 			"adversarial": "format_collision",
 			"note": "No keyword anywhere near it."
 		},
-		{ "name": "ssn", "label": "government_id" },
-		{ "name": "card", "label": "payment_card" }
+		{
+			"name": "ssn",
+			"label": "government_id"
+		},
+		{
+			"name": "card",
+			"label": "payment_card"
+		}
 	]
 }
