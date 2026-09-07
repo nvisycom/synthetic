@@ -64,7 +64,7 @@ artifact actually produced.
 
 | Path      | Holds                                                   | Tracked |
 | --------- | ------------------------------------------------------- | ------- |
-| `data/`   | Entity dictionaries, record specifications, adversarial cases | Yes |
+| `data/`   | Record specifications and curated adversarial cases     | Yes     |
 | `corpus/` | Rendered documents and their ground-truth manifest      | No      |
 | `runs/`   | Redaction output and scored reports                     | No      |
 

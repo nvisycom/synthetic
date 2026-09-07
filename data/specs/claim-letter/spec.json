@@ -1,0 +1,62 @@
+{
+	"version": 1,
+	"id": "claim-letter",
+	"description": "An insurance claim letter: one claimant written four ways, alongside structured identifiers in running prose.",
+	"format": "txt",
+	"slots": [
+		{
+			"name": "claimant",
+			"label": "person_name",
+			"surfaces": ["canonical", "abbreviated", "signature", "embedded"]
+		},
+		{
+			"name": "adjuster",
+			"label": "person_name"
+		},
+		{
+			"name": "dob",
+			"label": "date_of_birth"
+		},
+		{
+			"name": "ssn",
+			"label": "government_id",
+			"surfaces": ["canonical", "reformatted"]
+		},
+		{
+			"name": "policy",
+			"label": "insurance_id"
+		},
+		{
+			"name": "claim",
+			"label": "case_number"
+		},
+		{
+			"name": "phone",
+			"label": "phone_number"
+		},
+		{
+			"name": "street",
+			"label": "street_address"
+		},
+		{
+			"name": "city",
+			"label": "city"
+		},
+		{
+			"name": "zip",
+			"label": "postal_code"
+		},
+		{
+			"name": "amount",
+			"label": "monetary_amount"
+		},
+		{
+			"name": "account",
+			"label": "bank_account"
+		},
+		{
+			"name": "insurer",
+			"label": "organization_name"
+		}
+	]
+}

@@ -1,0 +1,29 @@
+{{insurer}}
+Claims Department
+
+RE: Claim {{claim}}
+
+Dear {{claimant}},
+
+We have received your claim regarding the incident reported on your policy
+{{policy}}. Our records list your date of birth as {{dob}} and your
+identification number as {{ssn}}.
+
+Correspondence for {{claimant:abbreviated}} should be directed to:
+
+  {{street}}
+  {{city}}, {{zip}}
+
+We attempted to reach you at {{phone}}. A settlement of {{amount}} has been
+approved and will be deposited to account ending {{account}}.
+
+Note: some systems record the identification number as {{ssn:reformatted}},
+which refers to the same individual.
+
+Questions may be sent to {{claimant:embedded}} or raised with your adjuster,
+{{adjuster}}.
+
+Sincerely,
+
+{{claimant:signature}}
+Claimant

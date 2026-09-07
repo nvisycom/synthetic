@@ -8,6 +8,23 @@ score means.
 synthetic generate --data ./data --seed 42 --out ./corpus
 ```
 
+## Layout
+
+Each spec is a directory under `specs/`:
+
+```
+specs/
+  claim-letter/
+    spec.json       which labels to plant, and how each is written
+    template.txt    the document layout
+```
+
+`spec.json` names the slots; `template.txt` places them with `{{slot}}`
+placeholders, and `{{slot:surface}}` to write one in a particular form. The
+template is a file of its own rather than a string inside the JSON so it reads
+as the document it is — a layout change shows up in a diff as a layout change,
+and whitespace is visible rather than escaped.
+
 ## What belongs here
 
 - **Entity dictionaries** — the pools that fabricated names, addresses, and
