@@ -13,7 +13,7 @@
  * @module datatypes/offset
  */
 
-import type { Range } from "./location.ts";
+import type { Range } from "#/datatypes/location.ts";
 
 const encoder = new TextEncoder();
 

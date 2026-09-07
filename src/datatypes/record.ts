@@ -153,12 +153,48 @@ export interface Modality {
 }
 
 /**
- * One synthetic document, with its complete answer key.
+ * How a record came to look the way it does.
  *
- * Named `CorpusRecord` rather than `Record` so it never shadows TypeScript's
- * builtin utility type in a file that imports it.
+ * Not the pipeline's audit log — that is the server's hash-chained account of
+ * how an entity was detected. This is the generator's own note of what it did,
+ * kept so a surprising record can be explained without rerunning it.
  */
-export interface CorpusRecord {
+export interface Provenance {
+	/**
+	 * Which renderer produced the artifact.
+	 *
+	 * Conventionally `ts:txt` or `python:pdf`, naming the side of the render
+	 * contract that ran.
+	 */
+	renderer: string;
+
+	/**
+	 * The record's own seed, forked from the corpus seed.
+	 *
+	 * Recorded so one record can be regenerated on its own, without replaying
+	 * the corpus up to it.
+	 */
+	seed: number;
+
+	/**
+	 * Lossy transformations applied after planting, in order.
+	 *
+	 * OCR noise, audio transcription, image compression. Values recorded in the
+	 * answer key are what survives these, so knowing which ran explains why a
+	 * planted value and its rendered form differ.
+	 */
+	transforms?: string[];
+}
+
+/**
+ * One record's entry in the corpus index.
+ *
+ * Deliberately small: the index is read in full to plan a run, while the answer
+ * key beside each artifact is read only when that record is scored. Keeping
+ * every entity in one file would mean parsing the whole corpus to grade a
+ * single document.
+ */
+export interface RecordEntry {
 	/** Stable identifier, unique within a corpus. */
 	id: string;
 
@@ -173,31 +209,25 @@ export interface CorpusRecord {
 	 */
 	specId: string;
 
-	/** Path to the rendered artifact, relative to the corpus root. */
+	/** Directory holding the artifact and its truth file, relative to the corpus root. */
 	path: string;
 
 	/** SHA-256 of the rendered artifact, hex-encoded. */
 	digest: string;
-
-	/** The independently scored components of this record. */
-	modalities: Modality[];
-
-	/** Every fabricated value this record carries. */
-	entities: Entity[];
-
-	/** Every appearance of those values, at known positions. */
-	occurrences: Occurrence[];
 }
 
 /**
- * A generated corpus and everything needed to reproduce it.
+ * The corpus index.
+ *
+ * Names what the corpus contains and what produced it, without carrying the
+ * ground truth itself.
  */
 export interface Manifest {
 	/**
-	 * Manifest schema version.
+	 * Schema version.
 	 *
-	 * Scoring refuses a manifest it does not understand rather than guessing.
-	 * A silently misread answer key produces confident, wrong numbers, which is
+	 * A reader refuses a version it does not understand rather than guessing. A
+	 * silently misread answer key produces confident, wrong numbers, which is
 	 * worse than no numbers at all.
 	 */
 	version: 1;
@@ -211,6 +241,52 @@ export interface Manifest {
 	/** When generation finished, as an ISO 8601 timestamp. */
 	createdAt: string;
 
-	/** The records making up the corpus. */
-	records: CorpusRecord[];
+	/** Every record in the corpus, in generation order. */
+	records: RecordEntry[];
+}
+
+/**
+ * One record's complete answer key.
+ *
+ * Written beside the artifact it describes and read only when that record is
+ * scored, so grading one document costs one small file rather than the corpus.
+ *
+ * Named `CorpusRecord` rather than `Record` so it never shadows TypeScript's
+ * builtin utility type in a file that imports it.
+ */
+export interface CorpusRecord {
+	/**
+	 * Schema version, independent of the manifest's.
+	 *
+	 * A truth file is read on its own, so it has to say what it is without the
+	 * index beside it.
+	 */
+	version: 1;
+
+	/** Stable identifier, matching this record's {@link RecordEntry.id}. */
+	id: string;
+
+	/** The container format this record is rendered into. */
+	format: DocumentFormat;
+
+	/** The specification this was generated from. */
+	specId: string;
+
+	/** Filename of the rendered artifact, relative to this record's directory. */
+	artifact: string;
+
+	/** SHA-256 of the rendered artifact, hex-encoded. */
+	digest: string;
+
+	/** How this record was produced. */
+	provenance: Provenance;
+
+	/** The independently scored components of this record. */
+	modalities: Modality[];
+
+	/** Every fabricated value this record carries. */
+	entities: Entity[];
+
+	/** Every appearance of those values, at known positions. */
+	occurrences: Occurrence[];
 }
