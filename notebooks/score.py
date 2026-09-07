@@ -70,6 +70,13 @@ def _(find_runs, mo):
 
 @app.cell
 def _(mo, open_session, run_picker, summary_table):
+    # Stops here when there is no run, leaving the message above readable
+    # rather than replacing it with the exception `open_session` would raise.
+    mo.stop(
+        not run_picker.options,
+        mo.md("*Nothing to score until a run exists.*"),
+    )
+
     session = open_session(run_picker.value)
     mo.md(summary_table(session))
     return (session,)
@@ -156,7 +163,7 @@ def _(mo, report_tallies):
         label="Break down by",
     )
     breakdown
-    return breakdown, report_tallies
+    return (breakdown,)
 
 
 @app.cell

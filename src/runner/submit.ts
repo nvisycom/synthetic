@@ -195,16 +195,17 @@ export function readAnalysis(analysis: Audit): Detected[] {
 						...(location.sheet_name !== undefined
 							? { sheetName: location.sheet_name }
 							: {}),
-						// Unset offsets mean the whole cell, and are left unset rather
-						// than filled in: a zero-width range at 0 is indistinguishable
-						// from a genuine empty match there, and a made-up width would
-						// score as a boundary miss against the value's real one.
-						...(location.start_offset !== undefined ||
+						// Either offset unset means the whole cell, so a range is
+						// recorded only when both are given. Supplying the missing half
+						// would invent a width the pipeline never claimed, and scoring
+						// compares that width — the same fabrication that let a wiped
+						// cell read as an exact match.
+						...(location.start_offset !== undefined &&
 						location.end_offset !== undefined
 							? {
 									cell: {
-										start: location.start_offset ?? 0,
-										end: location.end_offset ?? location.start_offset ?? 0,
+										start: location.start_offset,
+										end: location.end_offset,
 									},
 								}
 							: {}),

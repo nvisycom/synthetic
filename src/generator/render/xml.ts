@@ -131,10 +131,12 @@ function writeNode(
 			);
 		}
 		// A namespace declaration is markup, not content: it holds a URI rather
-		// than anything a document is about, so nothing is planted in it.
+		// than anything a document is about, so nothing is planted in it. Still
+		// escaped, because a URI may legitimately carry an `&` and writing one
+		// raw produces a document no parser will accept.
 		out.push(
 			name === "xmlns" || name.startsWith("xmlns:")
-				? ` ${name}="${value}"`
+				? ` ${name}="${escapeWith(value)}"`
 				: ` ${name}="${mark(value, entities, markers, escapeWith)}"`,
 		);
 	}

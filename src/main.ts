@@ -223,11 +223,9 @@ function positiveInteger(value: string, flag: string): number {
 		// Thrown rather than exited: the guard below prints it as a message and
 		// sets the exit code, and `process.exit` can terminate before a pending
 		// write to a pipe has flushed.
-		const error = new Error(
+		throw new HarnessError(
 			`${flag} must be a positive whole number, got ${JSON.stringify(value)}`,
 		);
-		error.name = "ExecutionError";
-		throw error;
 	}
 	return parsed;
 }

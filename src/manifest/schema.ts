@@ -40,6 +40,28 @@ const identifier = z
 	});
 
 /**
+ * An identifier that also names a file or directory.
+ *
+ * A record's id becomes a path segment three times over — its directory in a
+ * corpus, its outcome in a run, its detail in a report — so anything a path
+ * separator or a `..` could reach is refused here rather than sanitised at each
+ * of those sites. A corpus is a file someone hands you, and one carrying
+ * `../../escaped` as a record id would otherwise write outside the directory
+ * the caller named.
+ *
+ * Deliberately narrow: the generator emits `rec_0001`, and a benchmark has no
+ * use for an identifier that a filesystem would find interesting.
+ */
+export const pathSafeIdentifier = identifier.refine(
+	(value) =>
+		/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value) && !value.includes(".."),
+	{
+		message:
+			"Identifier is used as a filename, so it must start alphanumeric and hold only letters, digits, dot, dash, or underscore",
+	},
+);
+
+/**
  * A half-open range.
  *
  * `end` may equal `start` — an empty range is meaningful for a zero-width
@@ -163,7 +185,7 @@ export const ProvenanceSchema = z.strictObject({
  * One record's entry in the corpus index.
  */
 export const RecordEntrySchema = z.strictObject({
-	id: identifier,
+	id: pathSafeIdentifier,
 	format: z.enum(DOCUMENT_FORMATS),
 	specId: identifier,
 	path: z.string().min(1),
@@ -212,7 +234,7 @@ export const ManifestSchema = z
 export const CorpusRecordSchema = z
 	.strictObject({
 		version: z.literal(1),
-		id: identifier,
+		id: pathSafeIdentifier,
 		format: z.enum(DOCUMENT_FORMATS),
 		specId: identifier,
 		artifact: z.string().min(1),
@@ -329,5 +351,24 @@ function parseWith<T extends z.ZodType>(
 export function parseRecord(
 	value: unknown,
 ): z.infer<typeof CorpusRecordSchema> {
-	return parseWith(CorpusRecordSchema, value, "Record");
+	try {
+		return parseWith(CorpusRecordSchema, value, "Record");
+	} catch (cause) {
+		// A corpus generated before occurrences recorded `written` fails on
+		// every occurrence at once, and a wall of identical field errors does
+		// not say what to do about it. A corpus is derived — reproducible from
+		// its seed and the tracked specs — so regenerating is the fix, and
+		// saying so beats leaving it to be inferred.
+		if (
+			cause instanceof ManifestError &&
+			cause.issues.every((issue) => issue.startsWith("occurrences.")) &&
+			cause.issues.some((issue) => issue.includes("written"))
+		) {
+			throw new ManifestError(
+				"This corpus predates a change to how ground truth is recorded, and cannot be scored. Regenerate it with the same seed.",
+				cause.issues,
+			);
+		}
+		throw cause;
+	}
 }

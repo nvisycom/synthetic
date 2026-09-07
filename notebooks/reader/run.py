@@ -62,11 +62,24 @@ def load_run(run_dir: Path) -> pl.DataFrame:
 
 
 def _detected_frame(outcomes: pl.DataFrame) -> pl.DataFrame:
-    """The rows for records the pipeline processed."""
-    return (
+    """The rows for records the pipeline processed.
+
+    A record whose detection found nothing is dropped before the explode. It is
+    a real outcome — a document with nothing in it, or a pipeline that missed
+    everything — but exploding an empty list yields a null where a struct is
+    expected, and unnesting that raises rather than producing no rows.
+    """
+    detected = (
         outcomes.filter(pl.col("status") == "detected")
         .select("recordId", "detected")
-        .explode("detected")
+        .filter(pl.col("detected").list.len() > 0)
+    )
+
+    if detected.height == 0:
+        return pl.DataFrame(schema=_DETECTION_SCHEMA)
+
+    return (
+        detected.explode("detected")
         .unnest("detected")
         .pipe(
             lambda frame: frame.with_columns(

@@ -75,6 +75,13 @@ def _(find_runs, mo):
 
 @app.cell
 def _(mo, open_session, run_picker, summary_table):
+    # Stops here when there is no run, leaving the message above readable
+    # rather than replacing it with the exception `open_session` would raise.
+    mo.stop(
+        not run_picker.options,
+        mo.md("*Nothing to explore until a run exists.*"),
+    )
+
     session = open_session(run_picker.value)
     mo.md(summary_table(session))
     return (session,)
@@ -206,19 +213,30 @@ def _(mo, pl, planted):
 
 @app.cell
 def _(mo, pl, planted, record_picker):
-    mo.md("**Planted**")
-    planted.filter(pl.col("record") == record_picker.value).select(
-        "label", "surface", "expect", "adversarial", "start", "end", "text"
-    ).sort("start")
+    # Stacked, because only a cell's last expression renders: a bare `mo.md`
+    # above the table is discarded, leaving two adjacent tables whose meaning
+    # has to be inferred from their columns.
+    mo.vstack(
+        [
+            mo.md("**Planted**"),
+            planted.filter(pl.col("record") == record_picker.value)
+            .select("label", "surface", "expect", "adversarial", "start", "end", "text")
+            .sort("start"),
+        ]
+    )
     return
 
 
 @app.cell
 def _(found, mo, pl, record_picker):
-    mo.md("**Detected**")
-    found.filter(pl.col("record") == record_picker.value).select(
-        "label", "confidence", "recognizer", "start", "end", "failed"
-    ).sort("start")
+    mo.vstack(
+        [
+            mo.md("**Detected**"),
+            found.filter(pl.col("record") == record_picker.value)
+            .select("label", "confidence", "recognizer", "start", "end", "failed")
+            .sort("start"),
+        ]
+    )
     return
 
 

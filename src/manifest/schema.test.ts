@@ -296,6 +296,24 @@ describe("parseRecord", () => {
 		expect(location.cell).toBeUndefined();
 	});
 
+	it("refuses a record id that would escape its directory", () => {
+		// A record's id becomes a path segment three times over — its directory
+		// in a corpus, its outcome in a run, its detail in a report — and a
+		// corpus is a file someone hands you. `../../escaped` wrote outside the
+		// directory the caller named.
+		for (const id of ["../../escaped", "a/b", "..", ".hidden", "with space"]) {
+			expect(
+				() =>
+					parseRecord(
+						withRecord((r: never) => {
+							(r as { id: string }).id = id;
+						}),
+					),
+				`expected ${JSON.stringify(id)} to be refused`,
+			).toThrow(ManifestError);
+		}
+	});
+
 	it("reads on its own, carrying its own version", () => {
 		// A truth file is opened without the index beside it, so it has to say
 		// what it is.

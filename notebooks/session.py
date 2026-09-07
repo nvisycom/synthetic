@@ -74,10 +74,17 @@ def open_session(run_dir: Path | None, root: Path = ROOT) -> Session:
     digest = hashlib.sha256((corpus_dir / "manifest.json").read_bytes()).hexdigest()
 
     # Beside the run first, then the repository root, which is where `make
-    # score` writes one.
-    candidates = [run_dir / "report", root / "report"]
+    # score` writes one. A root report is shared ground: it belongs to whichever
+    # run was scored last, so it is accepted only if that was this one.
+    # Otherwise a notebook would show one run's identity above another run's
+    # numbers, which is the mistake the digest check exists to prevent.
     report_dir = next(
-        (path for path in candidates if (path / "report.json").exists()), None
+        (
+            path
+            for path in (run_dir / "report", root / "report")
+            if _scores(path, run["id"])
+        ),
+        None,
     )
 
     return Session(
@@ -88,6 +95,21 @@ def open_session(run_dir: Path | None, root: Path = ROOT) -> Session:
         report_dir=report_dir,
         same_corpus=digest == run["corpusDigest"],
     )
+
+
+def _scores(report_dir: Path, run_id: str) -> bool:
+    """Whether a report directory holds the scores for this run."""
+    summary = report_dir / "report.json"
+    if not summary.exists():
+        return False
+
+    try:
+        return json.loads(summary.read_text()).get("runId") == run_id
+    except (OSError, json.JSONDecodeError):
+        # A half-written or hand-edited report is treated as absent: the
+        # notebook then says the run is unscored, which is true and actionable,
+        # rather than failing to load at all.
+        return False
 
 
 def summary_table(session: Session) -> str:

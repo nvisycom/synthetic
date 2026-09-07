@@ -68,16 +68,20 @@ async function readRun(
 	runDir: string,
 	corpusDir: string,
 ): Promise<ReturnType<typeof parseRun>> {
-	let raw: string;
+	// Parsed inside the guard as well as read: a truncated or hand-edited run
+	// index throws a bare SyntaxError from `JSON.parse`, which reaches the
+	// caller as a stack trace rather than as the sentence saying which file is
+	// unusable.
+	let parsed: unknown;
 	try {
-		raw = await readFile(join(runDir, RUN_FILE), "utf8");
+		parsed = JSON.parse(await readFile(join(runDir, RUN_FILE), "utf8"));
 	} catch (cause) {
 		throw new ScoreError(
 			`Could not read a run at ${runDir}: ${(cause as Error).message}`,
 		);
 	}
 
-	const run = parseRun(JSON.parse(raw) as unknown);
+	const run = parseRun(parsed);
 
 	const digest = createHash("sha256")
 		.update(await readFile(join(corpusDir, MANIFEST_FILE)))

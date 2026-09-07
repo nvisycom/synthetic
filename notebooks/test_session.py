@@ -96,7 +96,7 @@ def test_open_session_finds_a_report_beside_the_run(tmp_path: Path) -> None:
     digest = _corpus(tmp_path)
     run_dir = _run(tmp_path, "42-aaa", digest)
     (run_dir / "report").mkdir()
-    (run_dir / "report" / "report.json").write_text("{}")
+    (run_dir / "report" / "report.json").write_text(json.dumps({"runId": "42-aaa"}))
 
     assert open_session(run_dir, tmp_path).report_dir == run_dir / "report"
 
@@ -105,9 +105,35 @@ def test_open_session_finds_a_report_at_the_root(tmp_path: Path) -> None:
     digest = _corpus(tmp_path)
     run_dir = _run(tmp_path, "42-aaa", digest)
     (tmp_path / "report").mkdir()
-    (tmp_path / "report" / "report.json").write_text("{}")
+    (tmp_path / "report" / "report.json").write_text(json.dumps({"runId": "42-aaa"}))
 
     assert open_session(run_dir, tmp_path).report_dir == tmp_path / "report"
+
+
+def test_open_session_ignores_a_report_for_another_run(tmp_path: Path) -> None:
+    # The root report belongs to whichever run was scored last. Showing one
+    # run's identity above another run's numbers is the mistake the digest
+    # check exists to prevent, so an unrelated report reads as no report.
+    digest = _corpus(tmp_path)
+    _run(tmp_path, "42-aaa", digest)
+    run_dir = _run(tmp_path, "42-bbb", digest)
+    (tmp_path / "report").mkdir()
+    (tmp_path / "report" / "report.json").write_text(json.dumps({"runId": "42-aaa"}))
+
+    session = open_session(run_dir, tmp_path)
+    assert session.report_dir is None
+    assert "run `synthetic score`" in summary_table(session)
+
+
+def test_open_session_ignores_an_unreadable_report(tmp_path: Path) -> None:
+    # A half-written report reads as absent, so the notebook says the run is
+    # unscored — true and actionable — rather than failing to load at all.
+    digest = _corpus(tmp_path)
+    run_dir = _run(tmp_path, "42-aaa", digest)
+    (tmp_path / "report").mkdir()
+    (tmp_path / "report" / "report.json").write_text("{truncated")
+
+    assert open_session(run_dir, tmp_path).report_dir is None
 
 
 def test_open_session_reports_no_report_when_none_was_written(tmp_path: Path) -> None:
