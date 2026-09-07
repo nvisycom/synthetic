@@ -12,7 +12,11 @@
 
 import { createHash } from "node:crypto";
 import type { Entity, SurfaceForm } from "#/datatypes/entity.ts";
-import type { CorpusRecord, Occurrence } from "#/datatypes/record.ts";
+import type {
+	CorpusRecord,
+	DocumentFormat,
+	Occurrence,
+} from "#/datatypes/record.ts";
 import type { Random } from "#/random.ts";
 import { sliceByteRange } from "#/util/offset.ts";
 import { fabricate, isFabricable, seedFaker } from "./fabricate.ts";
@@ -129,6 +133,24 @@ export function verifyOccurrences(
 }
 
 /**
+ * Resolves whatever escaping a format applies to its content.
+ */
+function unescapeFor(format: DocumentFormat, fragment: string): string {
+	switch (format) {
+		case "json":
+			return unescapeJson(fragment);
+		case "xml":
+			return unescapeXml(fragment);
+		case "csv":
+			// A quote inside a quoted cell is written twice.
+			return fragment.replaceAll('""', '"');
+		default:
+			// Plain text writes its content verbatim.
+			return fragment;
+	}
+}
+
+/**
  * Resolves XML entities in a fragment.
  */
 function unescapeXml(fragment: string): string {
@@ -170,6 +192,7 @@ function unescapeJson(fragment: string): string {
 export function verifySourceRanges(
 	rendered: string,
 	occurrences: readonly Occurrence[],
+	format: DocumentFormat,
 ): void {
 	for (const occurrence of occurrences) {
 		const { location } = occurrence;
@@ -191,18 +214,13 @@ export function verifySourceRanges(
 		// The rendered bytes carry the value's escaped form, so unescape before
 		// comparing rather than requiring the two to be byte-identical. JSON uses
 		// backslashes; CSV doubles a quote inside a quoted cell.
-		// The escaping a fragment carries depends on the format that wrote it, so
-		// accept any resolution that recovers the value rather than threading the
-		// format through. A fragment that matches under none of them is a genuine
-		// mismatch.
-		const candidates = [
-			found,
-			found.replaceAll('""', '"'),
-			unescapeJson(found),
-			unescapeXml(found),
-		];
+		// Unescaped by the format that wrote it, not by whichever rule happens to
+		// match: accepting any of them would let a CSV range pass because it
+		// resolved cleanly as JSON, which is exactly the confusion this check
+		// exists to catch.
+		const unescaped = unescapeFor(format, found);
 
-		if (!candidates.includes(occurrence.text)) {
+		if (unescaped !== occurrence.text) {
 			throw new GeneratorError(
 				`Occurrence ${occurrence.id} claims ${JSON.stringify(occurrence.text)} but its source range covers ${JSON.stringify(found)}`,
 			);
@@ -280,7 +298,7 @@ export function generateRecord(
 	// decoded ranges against the text a detector reads, and the source ranges
 	// against the bytes on disk.
 	verifyOccurrences(rendered.decoded, rendered.occurrences);
-	verifySourceRanges(rendered.text, rendered.occurrences);
+	verifySourceRanges(rendered.text, rendered.occurrences, spec.format);
 
 	const artifact = rendered.text;
 	const digest = createHash("sha256").update(artifact, "utf8").digest("hex");

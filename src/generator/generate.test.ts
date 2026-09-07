@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -273,11 +280,19 @@ describe("runGenerate", () => {
 	});
 
 	it("leaves no staging directory behind after a failure", async () => {
-		await writeSpec(SPEC, `${TEMPLATE}{{subject:misspelled}}\n`);
-		await expect(runGenerate(options())).rejects.toThrow();
-		await expect(
-			readFile(join(`${out}.staging`, "manifest.json")),
-		).rejects.toThrow();
+		// The failure has to come *after* a record has been written, or staging
+		// is never created and the assertion proves nothing. Specs are used in
+		// sorted order, so the broken one is named to sort second: record one
+		// succeeds and creates staging, record two fails.
+		await writeSpec({ ...SPEC, id: "aaa-works" });
+		await writeSpec(
+			{ ...SPEC, id: "zzz-breaks" },
+			`${TEMPLATE}{{subject:misspelled}}\n`,
+		);
+		await expect(runGenerate(options({ records: "4" }))).rejects.toThrow();
+
+		const left = await readdir(`${out}.staging`).catch(() => null);
+		expect(left, "the failing run left a staging directory behind").toBeNull();
 	});
 
 	it("generates a JSON record whose source ranges index the real file", async () => {

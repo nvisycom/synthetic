@@ -56,26 +56,35 @@ export async function provision(
 		description: "Benchmark run. Created and deleted by the harness.",
 	});
 
-	// `inline` rather than a template: see the module note.
-	await client.policies.createPolicy(workspace, {
-		slug: SLUG,
-		displayName: "Benchmark",
-		source: "inline",
-		definition: {
-			name: "Benchmark",
-			description: "Covers exactly the labels this corpus plants.",
-			scopes: [{ name: "planted", labels: [...labels] }],
-		},
-	});
+	// Everything after the workspace exists is undone on failure. A policy the
+	// server rejects would otherwise strand the workspace, since the caller's
+	// teardown only covers a run that started.
+	try {
+		// `inline` rather than a template: see the module note.
+		await client.policies.createPolicy(workspace, {
+			slug: SLUG,
+			displayName: "Benchmark",
+			source: "inline",
+			definition: {
+				name: "Benchmark",
+				description: "Covers exactly the labels this corpus plants.",
+				scopes: [{ name: "planted", labels: [...labels] }],
+			},
+		});
 
-	// Created enabled: a pipeline defaults to `draft`, and submitting a detection
-	// to a draft pipeline fails with a conflict rather than queueing.
-	await client.pipelines.createPipeline(workspace, {
-		slug: SLUG,
-		displayName: "Benchmark",
-		status: "enabled",
-		definition: { policySlugs: [SLUG] },
-	});
+		// Created enabled: a pipeline defaults to `draft`, and submitting a
+		// detection to a draft pipeline fails with a conflict rather than
+		// queueing.
+		await client.pipelines.createPipeline(workspace, {
+			slug: SLUG,
+			displayName: "Benchmark",
+			status: "enabled",
+			definition: { policySlugs: [SLUG] },
+		});
+	} catch (cause) {
+		await teardown(client, workspace);
+		throw cause;
+	}
 
 	return { workspace, pipeline: SLUG, labels };
 }

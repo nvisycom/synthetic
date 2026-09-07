@@ -231,9 +231,14 @@ export async function submitRecord(
 
 	let detectionId: string;
 	try {
-		const detection = await withRetry(
-			() => client.detections.createDetection(workspace, pipeline, { fileId }),
-			poll.attempts,
+		// Not retried. The API takes no idempotency key, so a create whose
+		// response was lost in transit would run twice on the server while the
+		// run recorded one of them — a record billed and processed twice, and a
+		// detection nothing ever reads. A failure here is reported instead.
+		const detection = await client.detections.createDetection(
+			workspace,
+			pipeline,
+			{ fileId },
 		);
 		detectionId = detection.id;
 	} catch (cause) {

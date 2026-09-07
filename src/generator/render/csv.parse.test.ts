@@ -55,6 +55,12 @@ describe("parseCsv", () => {
 		]);
 	});
 
+	it("keeps a row that is only a quoted empty cell", () => {
+		// Content alone cannot distinguish a quoted empty cell from no cell, so
+		// the row was dropped entirely.
+		expect(parseCsv('""')).toEqual([[""]]);
+	});
+
 	it("rejects an unterminated quoted cell", () => {
 		expect(() => parseCsv('name\n"never closed\n')).toThrow(SyntaxError);
 	});

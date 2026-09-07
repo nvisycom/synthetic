@@ -21,6 +21,7 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import hashlib
     import json
     from pathlib import Path
 
@@ -32,7 +33,7 @@ def _():
     # type-checked without marimo's cell semantics in the way.
     from corpus import load_run, load_truth, with_format
 
-    return Path, alt, json, load_run, load_truth, mo, pl, with_format
+    return Path, alt, hashlib, json, load_run, load_truth, mo, pl, with_format
 
 
 @app.cell
@@ -97,10 +98,19 @@ def _(json, root, run_picker, runs):
 
 
 @app.cell
-def _(manifest, mo, run):
-    same_corpus = run["corpusSeed"] == manifest["seed"]
+def _(corpus_dir, hashlib, manifest, mo, run):
+    # The digest, not the seed. Two corpora can share a seed and differ — the
+    # specs in `data/` may have changed since — and comparing a run against a
+    # corpus it was not made from silently attributes detections to the wrong
+    # planted values.
+    actual_digest = hashlib.sha256(
+        (corpus_dir / "manifest.json").read_bytes()
+    ).hexdigest()
+    same_corpus = actual_digest == run["corpusDigest"]
     mismatch = (
-        "" if same_corpus else f" ⚠️ the corpus on disk is seed {manifest['seed']}"
+        ""
+        if same_corpus
+        else " ⚠️ **this corpus is not the one the run was made against**"
     )
 
     mo.md(

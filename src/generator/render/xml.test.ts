@@ -191,6 +191,16 @@ describe("renderXml", () => {
 		expectVerifiable(rendered);
 	});
 
+	it("rejects a placeholder in a tag or an attribute name", () => {
+		const who = slots(["who", entity("ent_1", "Dana")]);
+		expect(() => renderXml({ tag: "{{who}}" }, who, "mod_1")).toThrow(
+			/markup is not/,
+		);
+		expect(() =>
+			renderXml({ tag: "a", attrs: { "{{who}}": "v" } }, who, "mod_1"),
+		).toThrow(/names are not/);
+	});
+
 	it("rejects a node with no tag", () => {
 		expect(() => renderXml({ text: "orphan" }, slots(), "mod_1")).toThrow(
 			TemplateError,

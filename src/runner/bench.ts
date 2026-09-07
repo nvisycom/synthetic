@@ -12,7 +12,7 @@ import { version } from "#/config.ts";
 import { logger } from "#/logger.ts";
 import { MANIFEST_FILE } from "#/manifest/layout.ts";
 import { readManifest, readRecord } from "#/manifest/read.ts";
-import { outcomePath, RUN_FILE } from "./layout.ts";
+import { outcomePath, RECORDS_DIR, RUN_FILE } from "./layout.ts";
 import { provision, teardown } from "./provision.ts";
 import type { Run } from "./run.ts";
 import { submitRecord } from "./submit.ts";
@@ -185,7 +185,15 @@ export async function runBench(options: BenchOptions): Promise<void> {
 		manifest.records.length,
 	);
 
-	const concurrency = Math.max(1, options.concurrency ?? DEFAULT_CONCURRENCY);
+	// Validated rather than clamped: `Math.max(1, NaN)` is NaN, which spawns no
+	// workers at all, so a mistyped flag would write an empty run and call it a
+	// success.
+	const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+	if (!Number.isInteger(concurrency) || concurrency < 1) {
+		throw new BenchError(
+			`Concurrency must be a positive integer, got ${JSON.stringify(options.concurrency)}`,
+		);
+	}
 	const threshold = options.failureThreshold ?? DEFAULT_FAILURE_THRESHOLD;
 	const window = options.failureWindow ?? DEFAULT_FAILURE_WINDOW;
 
@@ -196,7 +204,7 @@ export async function runBench(options: BenchOptions): Promise<void> {
 	let aborted: BenchError | undefined;
 
 	try {
-		await mkdir(join(options.out, runId, "records"), { recursive: true });
+		await mkdir(join(options.out, runId, RECORDS_DIR), { recursive: true });
 
 		let next = 0;
 		const worker = async (): Promise<void> => {

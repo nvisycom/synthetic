@@ -177,6 +177,27 @@ def test_keeps_a_failed_record_as_a_row(tmp_path: Path) -> None:
     assert failed["label"] is None
 
 
+def test_reads_a_run_where_every_record_failed(tmp_path: Path) -> None:
+    # The mirror of the no-failures case: no outcome carries `detected`, so the
+    # column does not exist. A pipeline that stops answering produces exactly
+    # this, and it is the run most worth being able to read.
+    for record in ("rec_0001", "rec_0002"):
+        _write_outcome(
+            tmp_path,
+            {
+                "status": "failed",
+                "recordId": record,
+                "stage": "upload",
+                "message": "fetch failed",
+            },
+        )
+
+    found = load_run(tmp_path)
+    assert found.height == 2
+    assert found["label"].null_count() == 2
+    assert set(found["failed"].to_list()) == {"upload"}
+
+
 def test_attaches_the_format_a_run_does_not_know(tmp_path: Path) -> None:
     corpus, run = tmp_path / "corpus", tmp_path / "run"
     _write(corpus, _truth("rec_0001", format="csv"))

@@ -23,7 +23,12 @@
 import type { Entity, SurfaceForm } from "#/datatypes/entity.ts";
 import type { Occurrence } from "#/datatypes/record.ts";
 import { byteLength } from "#/util/offset.ts";
-import { PLACEHOLDER, resolveSlot, TemplateError } from "../template.ts";
+import {
+	hasPlaceholder,
+	PLACEHOLDER,
+	resolveSlot,
+	TemplateError,
+} from "../template.ts";
 import type { Rendered } from "./index.ts";
 
 /** Two spaces per level, as the written document uses. */
@@ -213,6 +218,13 @@ function writeValue(
 		}
 		writer.raw("{\n");
 		for (const [index, [key, item]] of entries.entries()) {
+			// A placeholder in a key would be written verbatim and plant nothing,
+			// leaving a spec that looks correct and a document that is not.
+			if (hasPlaceholder(key)) {
+				throw new TemplateError(
+					`Key ${JSON.stringify(key)} carries a placeholder; values are planted, keys are not`,
+				);
+			}
 			writer.raw(`${inner}${JSON.stringify(key)}: `);
 			writeValue(writer, item, entities, modalityId, depth + 1);
 			writer.raw(index === entries.length - 1 ? "\n" : ",\n");

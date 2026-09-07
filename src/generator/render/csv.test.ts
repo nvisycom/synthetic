@@ -157,6 +157,18 @@ describe("renderCsv", () => {
 		expect(rows[1]?.[1]).toBe("Reyes, Dana");
 	});
 
+	it("keeps source offsets correct past a multi-byte character", () => {
+		// The bug this guards: the shift was counted by slicing the cell at a
+		// *byte* offset, which overshoots in UTF-16 and counted quotes sitting
+		// after the value rather than before it.
+		const rendered = renderCsv(
+			[["note"], ['日本語 {{who}} "q" tail']],
+			slots(["who", entity("ent_1", "Dana")]),
+			"mod_1",
+		);
+		expectVerifiable(rendered);
+	});
+
 	it("rejects a template that is not a table", () => {
 		expect(() => renderCsv({ not: "a table" }, slots(), "mod_1")).toThrow(
 			TemplateError,

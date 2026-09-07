@@ -140,6 +140,18 @@ describe("renderJson", () => {
 		});
 	});
 
+	it("rejects a placeholder in a key", () => {
+		// It would be written verbatim and plant nothing, leaving a spec that
+		// looks correct and a document that is not.
+		expect(() =>
+			renderJson(
+				{ "{{who}}": "value" },
+				slots(["who", entity("ent_1", "Dana")]),
+				"mod_1",
+			),
+		).toThrow(/keys are not/);
+	});
+
 	it("rejects a template that is not a container", () => {
 		expect(() => renderJson("just a string", slots(), "mod_1")).toThrow(
 			TemplateError,

@@ -140,8 +140,8 @@ const bench = defineCommand({
 				...(process.env.NVISY_API_TOKEN
 					? { token: process.env.NVISY_API_TOKEN }
 					: {}),
-				concurrency: Number(args.concurrency),
-				timeoutMs: Number(args.timeout) * 1000,
+				concurrency: positiveInteger(args.concurrency, "--concurrency"),
+				timeoutMs: positiveInteger(args.timeout, "--timeout") * 1000,
 			}),
 		);
 	},
@@ -189,12 +189,41 @@ const main = defineCommand({
  * caller cannot do anything about — while a genuine fault still prints in full,
  * because there the frames are the useful part.
  */
+/**
+ * Reads a flag that must be a positive whole number.
+ *
+ * `Number("abc")` is NaN, and NaN survives every comparison downstream — a
+ * mistyped concurrency spawns no workers and writes an empty run as a success.
+ */
+function positiveInteger(value: string, flag: string): number {
+	const parsed = Number(value);
+	if (!Number.isInteger(parsed) || parsed < 1) {
+		// Thrown rather than exited: the guard below prints it as a message and
+		// sets the exit code, and `process.exit` can terminate before a pending
+		// write to a pipe has flushed.
+		const error = new Error(
+			`${flag} must be a positive whole number, got ${JSON.stringify(value)}`,
+		);
+		error.name = "BenchError";
+		throw error;
+	}
+	return parsed;
+}
+
 /** The hosted API, used unless told otherwise. */
 const PRODUCTION_URL = "https://api.nvisy.com";
 
 /** A locally running server, as `--development` selects. */
 const DEVELOPMENT_URL = "http://127.0.0.1:8080";
 
+/**
+ * Errors the harness raises deliberately, as opposed to ones that mean a bug.
+ *
+ * A missing token or an unusable spec is a message to act on, so it is printed
+ * as one. A stack trace there buries the sentence that matters under frames the
+ * caller cannot do anything about — while a genuine fault still prints in full,
+ * because there the frames are the useful part.
+ */
 const EXPECTED = new Set([
 	"BenchError",
 	"GeneratorError",
@@ -225,7 +254,7 @@ async function guard(work: () => Promise<void>): Promise<void> {
 		for (const issue of error.issues ?? []) {
 			process.stderr.write(`  - ${issue}\n`);
 		}
-		process.exit(1);
+		process.exitCode = 1;
 	}
 }
 

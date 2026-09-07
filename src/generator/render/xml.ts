@@ -26,7 +26,12 @@
 import type { Entity } from "#/datatypes/entity.ts";
 import type { Occurrence } from "#/datatypes/record.ts";
 import { byteLength } from "#/util/offset.ts";
-import { PLACEHOLDER, resolveSlot, TemplateError } from "../template.ts";
+import {
+	hasPlaceholder,
+	PLACEHOLDER,
+	resolveSlot,
+	TemplateError,
+} from "../template.ts";
 import type { Rendered } from "./index.ts";
 
 /** Two spaces per level, as the written document uses. */
@@ -185,9 +190,20 @@ function writeNode(
 		writer.raw(" -->\n");
 	}
 
+	if (hasPlaceholder(node.tag)) {
+		throw new TemplateError(
+			`Tag ${JSON.stringify(node.tag)} carries a placeholder; content is planted, markup is not`,
+		);
+	}
+
 	writer.raw(`${pad}<${node.tag}`);
 
 	for (const [name, value] of Object.entries(node.attrs ?? {})) {
+		if (hasPlaceholder(name)) {
+			throw new TemplateError(
+				`Attribute name ${JSON.stringify(name)} carries a placeholder; values are planted, names are not`,
+			);
+		}
 		writer.raw(` ${name}="`);
 		writeContent(writer, value, entities, modalityId, "attribute");
 		writer.raw('"');

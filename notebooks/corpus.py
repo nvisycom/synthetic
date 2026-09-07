@@ -14,6 +14,17 @@ from pathlib import Path
 
 import polars as pl
 
+#: The dtype of each detection column, for building an empty frame.
+_DETECTION_SCHEMA = {
+    "record": pl.String,
+    "label": pl.String,
+    "confidence": pl.Float64,
+    "recognizer": pl.String,
+    "start": pl.Int64,
+    "end": pl.Int64,
+    "failed": pl.String,
+}
+
 #: Columns a detection frame carries, whether the record succeeded or failed.
 DETECTION_COLUMNS = [
     "record",
@@ -118,7 +129,23 @@ def load_run(run_dir: Path) -> pl.DataFrame:
 
     outcomes = pl.concat([pl.read_json(path) for path in paths], how="diagonal_relaxed")
 
-    detected = (
+    # A run where every record failed has no `detected` column at all, just as
+    # one with no failures has no `stage`. Both happen: a pipeline that stops
+    # answering produces the first.
+    if "detected" not in outcomes.columns:
+        detected = pl.DataFrame(schema=_DETECTION_SCHEMA)
+    else:
+        detected = _detected_frame(outcomes)
+
+    if "stage" not in outcomes.columns:
+        return detected
+
+    return pl.concat([detected, _failed_frame(outcomes)], how="vertical")
+
+
+def _detected_frame(outcomes: pl.DataFrame) -> pl.DataFrame:
+    """The rows for records the pipeline processed."""
+    return (
         outcomes.filter(pl.col("status") == "detected")
         .select("recordId", "detected")
         .explode("detected")
@@ -134,12 +161,10 @@ def load_run(run_dir: Path) -> pl.DataFrame:
         .select(DETECTION_COLUMNS)
     )
 
-    # A run with no failures has no `stage` column at all, since the concat only
-    # sees the shape of the files that exist.
-    if "stage" not in outcomes.columns:
-        return detected
 
-    failed = (
+def _failed_frame(outcomes: pl.DataFrame) -> pl.DataFrame:
+    """The rows for records that never produced a detection."""
+    return (
         outcomes.filter(pl.col("status") == "failed")
         .select("recordId", "stage")
         .rename({"recordId": "record", "stage": "failed"})
@@ -152,8 +177,6 @@ def load_run(run_dir: Path) -> pl.DataFrame:
         )
         .select(DETECTION_COLUMNS)
     )
-
-    return pl.concat([detected, failed], how="vertical")
 
 
 def with_format(found: pl.DataFrame, planted: pl.DataFrame) -> pl.DataFrame:

@@ -84,6 +84,16 @@ async function loadSpecs(dataDir: string): Promise<LoadedSpec[]> {
 		// file that is wrong rather than surface three steps downstream.
 		const spec = parseSpec(raw, specPath);
 
+		// Checked before the template is read: an unsupported format falls back to
+		// `template.txt`, so a missing loader would otherwise be reported as a
+		// missing template and send the author after the wrong thing.
+		const load = loaderFor(spec.format);
+		if (load === undefined) {
+			throw new GeneratorError(
+				`Spec ${JSON.stringify(spec.id)} uses format ${JSON.stringify(spec.format)}, which has no template loader`,
+			);
+		}
+
 		// Each format stores its template in the shape its documents have, so the
 		// filename and the parsing both come from the format.
 		const filename = spec.template ?? templateFilename(spec.format);
@@ -95,13 +105,6 @@ async function loadSpecs(dataDir: string): Promise<LoadedSpec[]> {
 		} catch {
 			throw new GeneratorError(
 				`Spec ${JSON.stringify(spec.id)} names a template at ${templatePath}, which does not exist`,
-			);
-		}
-
-		const load = loaderFor(spec.format);
-		if (load === undefined) {
-			throw new GeneratorError(
-				`Spec ${JSON.stringify(spec.id)} uses format ${JSON.stringify(spec.format)}, which has no template loader`,
 			);
 		}
 

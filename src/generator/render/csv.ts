@@ -100,13 +100,21 @@ function quote(text: string): { written: string; contentOffset: number } {
 }
 
 /**
- * Maps an offset in a cell's text to its offset in the quoted form.
+ * Maps a byte offset in a cell's text to its offset in the quoted form.
  *
- * Only doubled quotes shift it, and only those before the offset.
+ * Only doubled quotes shift it, and only those before the offset. The prefix is
+ * measured in bytes rather than sliced by string index: the two diverge as soon
+ * as a cell holds a multi-byte character, and slicing by the byte offset would
+ * count quotes that sit after the value rather than before it.
  */
 function shiftForQuoting(text: string, offset: number): number {
-	const before = text.slice(0, offset);
-	const doubled = (before.match(/"/g) ?? []).length;
+	let bytes = 0;
+	let doubled = 0;
+	for (const character of text) {
+		if (bytes >= offset) break;
+		if (character === '"') doubled++;
+		bytes += byteLength(character);
+	}
 	return offset + doubled;
 }
 

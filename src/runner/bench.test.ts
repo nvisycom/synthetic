@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -50,7 +50,9 @@ describe("runBench", () => {
 			baseUrl: "http://127.0.0.1:9",
 		}).catch(() => {});
 
-		await expect(readFile(join(out, "run.json"))).rejects.toThrow();
+		// The index lives under the run's own id, so check the output directory
+		// holds nothing rather than probing a path the runner never writes.
+		await expect(readdir(out)).rejects.toThrow();
 	}, 30_000);
 
 	it("accepts a concurrency of one, for reproducing a failure serially", async () => {
@@ -64,6 +66,21 @@ describe("runBench", () => {
 				concurrency: 1,
 			}),
 		).rejects.toThrow(/No API server/);
+	}, 30_000);
+
+	it("rejects a concurrency that is not a positive integer", async () => {
+		// `Math.max(1, NaN)` is NaN, which spawns no workers: the loop never runs
+		// and an empty run would be written as a success.
+		for (const concurrency of [Number.NaN, 0, -1, 1.5]) {
+			await expect(
+				runBench({
+					corpus: await corpus(2),
+					out: join(work, "runs"),
+					baseUrl: "http://127.0.0.1:9",
+					concurrency,
+				}),
+			).rejects.toThrow();
+		}
 	}, 30_000);
 
 	it("explains how to use an existing account instead", async () => {

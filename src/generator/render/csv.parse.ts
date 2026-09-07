@@ -26,6 +26,9 @@ export function parseCsv(text: string): string[][] {
 	let cell = "";
 	let quoted = false;
 	let index = 0;
+	// A quoted empty cell is indistinguishable from no cell at all by content
+	// alone, so track whether one was opened.
+	let started = false;
 
 	// Normalize line endings so a template authored on Windows parses the same.
 	const source = text.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
@@ -52,6 +55,7 @@ export function parseCsv(text: string): string[][] {
 
 		if (character === '"' && cell === "") {
 			quoted = true;
+			started = true;
 			index++;
 			continue;
 		}
@@ -59,6 +63,7 @@ export function parseCsv(text: string): string[][] {
 		if (character === ",") {
 			row.push(cell);
 			cell = "";
+			started = false;
 			index++;
 			continue;
 		}
@@ -68,11 +73,13 @@ export function parseCsv(text: string): string[][] {
 			rows.push(row);
 			row = [];
 			cell = "";
+			started = false;
 			index++;
 			continue;
 		}
 
 		cell += character;
+		started = true;
 		index++;
 	}
 
@@ -80,8 +87,9 @@ export function parseCsv(text: string): string[][] {
 		throw new SyntaxError("Unterminated quoted cell");
 	}
 
-	// A trailing newline closes the last row rather than opening an empty one.
-	if (cell !== "" || row.length > 0) {
+	// A trailing newline closes the last row rather than opening an empty one,
+	// but a quoted empty cell still counts as a cell.
+	if (started || cell !== "" || row.length > 0) {
 		row.push(cell);
 		rows.push(row);
 	}
