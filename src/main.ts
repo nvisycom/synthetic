@@ -49,7 +49,7 @@ const generate = defineCommand({
 	},
 	async run({ args }) {
 		const { runGenerate } = await import("./generator/generate.ts");
-		await runGenerate(args);
+		await guard(() => runGenerate(args));
 	},
 });
 
@@ -77,7 +77,7 @@ const score = defineCommand({
 	},
 	async run({ args }) {
 		const { runScore } = await import("./scoring/score.ts");
-		await runScore(args);
+		await guard(() => runScore(args));
 	},
 });
 
@@ -93,14 +93,57 @@ const bench = defineCommand({
 			default: "./corpus",
 			alias: "c",
 		},
-		report: {
+		out: {
 			type: "string",
-			description: "Where to write the report; omit to print to stdout",
+			description: "Directory to write the run into",
+			default: "./runs",
+			alias: "o",
+		},
+		development: {
+			type: "boolean",
+			description: "Run against a local server on port 8080",
+			alias: "d",
+			default: false,
+		},
+		"base-url": {
+			type: "string",
+			description: "API base URL, overriding --development",
+		},
+		concurrency: {
+			type: "string",
+			description:
+				"How many records to have in flight at once; the win flattens past 4",
+			default: "4",
+			alias: "j",
+		},
+		timeout: {
+			type: "string",
+			description: "Give up on a detection after this many seconds",
+			default: "120",
 		},
 	},
 	async run({ args }) {
 		const { runBench } = await import("./runner/bench.ts");
-		await runBench(args);
+		await guard(() =>
+			runBench({
+				corpus: args.corpus,
+				out: args.out,
+				// An explicit URL wins; otherwise --development picks the local
+				// server, and the default stays production so a run against it is
+				// never what happens by accident.
+				baseUrl:
+					args["base-url"] ||
+					(args.development ? DEVELOPMENT_URL : PRODUCTION_URL),
+				// Read from the environment rather than a flag, so a token never
+				// lands in a shell history or a process listing. Without one the
+				// runner creates a throwaway account of its own.
+				...(process.env.NVISY_API_TOKEN
+					? { token: process.env.NVISY_API_TOKEN }
+					: {}),
+				concurrency: Number(args.concurrency),
+				timeoutMs: Number(args.timeout) * 1000,
+			}),
+		);
 	},
 });
 
@@ -137,5 +180,53 @@ const main = defineCommand({
 	},
 	subCommands: { generate, score, bench },
 });
+
+/**
+ * Errors the harness raises deliberately, as opposed to ones that mean a bug.
+ *
+ * A missing token or an unusable spec is a message to act on, so it is printed
+ * as one. A stack trace there buries the sentence that matters under frames the
+ * caller cannot do anything about — while a genuine fault still prints in full,
+ * because there the frames are the useful part.
+ */
+/** The hosted API, used unless told otherwise. */
+const PRODUCTION_URL = "https://api.nvisy.com";
+
+/** A locally running server, as `--development` selects. */
+const DEVELOPMENT_URL = "http://127.0.0.1:8080";
+
+const EXPECTED = new Set([
+	"BenchError",
+	"GeneratorError",
+	"ManifestError",
+	"RunError",
+	"SpecError",
+	"TemplateError",
+]);
+
+/**
+ * Runs a command, reporting a deliberate failure as a message.
+ *
+ * Wrapped per command rather than around `runMain`, because citty's runMain
+ * catches everything, console.errors it, and exits — so an error thrown from a
+ * command never reaches a handler outside it, and handling it outside would
+ * also give up runMain's `--help` and `--version`.
+ */
+async function guard(work: () => Promise<void>): Promise<void> {
+	try {
+		await work();
+	} catch (cause) {
+		const error = cause as Error & { issues?: readonly string[] };
+		if (!EXPECTED.has(error.name)) throw cause;
+
+		// A message to act on, not a fault: print the sentence that matters and
+		// leave out frames the caller can do nothing about.
+		process.stderr.write(`${error.message}\n`);
+		for (const issue of error.issues ?? []) {
+			process.stderr.write(`  - ${issue}\n`);
+		}
+		process.exit(1);
+	}
+}
 
 await runMain(main);

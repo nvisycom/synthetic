@@ -50,6 +50,7 @@ function validManifest(): unknown {
 		version: 1,
 		seed: 42,
 		generator: "0.1.0",
+		labels: ["person_name"],
 		createdAt: "2026-01-01T00:00:00.000Z",
 		records: [
 			{

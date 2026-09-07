@@ -11,6 +11,7 @@
  */
 
 import type { Entity, SurfaceForm } from "./entity.ts";
+import type { Label } from "./label.ts";
 import type { Location } from "./location.ts";
 
 /**
@@ -238,6 +239,16 @@ export interface Manifest {
 
 	/** Harness version that generated it, for tracing a change in results. */
 	generator: string;
+
+	/**
+	 * Every label the corpus plants, in taxonomy order.
+	 *
+	 * Recorded here because the labels themselves live in each record's answer
+	 * key, and a consumer that needs only the set — the runner scoping a policy,
+	 * a report naming what was in scope — should not have to read the whole
+	 * corpus to learn it.
+	 */
+	labels: Label[];
 
 	/** When generation finished, as an ISO 8601 timestamp. */
 	createdAt: string;

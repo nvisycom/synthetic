@@ -14,6 +14,8 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import { version } from "#/config.ts";
+import type { Label } from "#/datatypes/label.ts";
+import { LABEL_IDS } from "#/datatypes/label.ts";
 import type { Manifest, RecordEntry } from "#/datatypes/record.ts";
 import { logger } from "#/logger.ts";
 import { recordPath } from "#/manifest/layout.ts";
@@ -143,6 +145,9 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 	try {
 		const root = Random.fromSeed(seed);
 		const entries: RecordEntry[] = [];
+		// Collected as records are built, so the manifest can name the corpus'
+		// label set without a consumer reading every answer key.
+		const labels = new Set<Label>();
 
 		for (let index = 0; index < count; index++) {
 			// Each record draws from its own stream, so changing one record — or the
@@ -167,6 +172,8 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 			await writeFile(join(staging, path, record.artifact), artifact, "utf8");
 			await writeRecord(staging, path, record);
 
+			for (const entity of record.entities) labels.add(entity.label);
+
 			entries.push({
 				id,
 				format: record.format,
@@ -182,6 +189,8 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 			version: 1,
 			seed,
 			generator: version,
+			// Taxonomy order, so two manifests list them identically.
+			labels: LABEL_IDS.filter((label) => labels.has(label)),
 			createdAt: new Date().toISOString(),
 			records: entries,
 		};

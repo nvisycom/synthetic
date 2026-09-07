@@ -184,6 +184,7 @@ export const ManifestSchema = z
 		version: z.literal(1),
 		seed: z.number().int(),
 		generator: z.string().min(1),
+		labels: z.array(LabelSchema),
 		createdAt: z.iso.datetime(),
 		records: z.array(RecordEntrySchema),
 	})
