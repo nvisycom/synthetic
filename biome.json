@@ -17,6 +17,7 @@
 			"!corpus",
 			"!*.staging",
 			"!runs",
+			"!report",
 			"!**/.venv",
 			"!notebooks"
 		]
