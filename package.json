@@ -41,6 +41,7 @@
 		"test:watch": "vitest --watch",
 		"test:coverage": "vitest run --coverage",
 		"test:ui": "vitest --ui",
+		"test:e2e": "vitest run --config vitest.e2e.config.ts",
 		"lint": "biome lint .",
 		"lint:fix": "biome lint --write .",
 		"format": "biome format --write .",

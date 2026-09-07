@@ -29,6 +29,11 @@ output/
 corpus/
 runs/
 
+# Generation writes here and renames it into place, so a failure cannot leave a
+# manifest from one run beside records from another. It should never survive a
+# run, but a killed process can strand one.
+*.staging/
+
 # Environment
 .env*
 !.env.example

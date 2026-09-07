@@ -13,7 +13,10 @@
 			"!dist",
 			"!docs",
 			"!coverage",
-			"!.claude"
+			"!.claude",
+			"!corpus",
+			"!*.staging",
+			"!runs"
 		]
 	},
 	"formatter": {
