@@ -64,7 +64,16 @@ def load_report(report_dir: Path) -> dict:
         message = f"No report at {path}"
         raise FileNotFoundError(message)
 
-    return json.loads(path.read_text())
+    report = json.loads(path.read_text())
+
+    # Valid JSON is not necessarily a report. `null` and a list both parse
+    # cleanly, and returning one would break at whichever field is read first
+    # rather than here, where the file that is wrong can be named.
+    if not isinstance(report, dict):
+        message = f"{path} is not a report: expected an object"
+        raise ValueError(message)
+
+    return report
 
 
 def report_tallies(report: dict, breakdown: str) -> pl.DataFrame:

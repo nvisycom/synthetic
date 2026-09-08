@@ -35,6 +35,22 @@ class Session:
     #: Whether the corpus on disk is the one the run was made against.
     same_corpus: bool
 
+    #: The root the run and corpus were found under.
+    root: Path
+
+    @property
+    def run_path(self) -> str:
+        """The run's path relative to the repository, for showing in a command.
+
+        A notebook's output is committed as an export, so an absolute path here
+        is the author's home directory embedded in the repository — and a
+        command nobody else can paste.
+        """
+        try:
+            return f"./{self.run_dir.relative_to(self.root)}"
+        except ValueError:
+            return str(self.run_dir)
+
 
 def find_runs(root: Path = ROOT) -> list[Path]:
     """Every run under `root`, newest first."""
@@ -94,6 +110,7 @@ def open_session(run_dir: Path | None, root: Path = ROOT) -> Session:
         manifest=manifest,
         report_dir=report_dir,
         same_corpus=digest == run["corpusDigest"],
+        root=root,
     )
 
 
@@ -104,12 +121,17 @@ def _scores(report_dir: Path, run_id: str) -> bool:
         return False
 
     try:
-        return json.loads(summary.read_text()).get("runId") == run_id
+        report = json.loads(summary.read_text())
     except (OSError, json.JSONDecodeError):
         # A half-written or hand-edited report is treated as absent: the
         # notebook then says the run is unscored, which is true and actionable,
         # rather than failing to load at all.
         return False
+
+    # Valid JSON is not necessarily a report. `null`, a list, or a bare string
+    # parse cleanly and then have no `runId` to ask for, so the shape is
+    # checked rather than assumed.
+    return isinstance(report, dict) and report.get("runId") == run_id
 
 
 def summary_table(session: Session) -> str:

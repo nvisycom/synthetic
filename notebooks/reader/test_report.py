@@ -112,6 +112,15 @@ def test_load_report_reads_the_summary_without_the_detail(tmp_path: Path) -> Non
     assert len(load_details(tmp_path)) == 1
 
 
+def test_load_report_refuses_json_that_is_not_a_report(tmp_path: Path) -> None:
+    # Returning `null` here would break at whichever field a caller read first,
+    # rather than where the file that is wrong can be named.
+    (tmp_path / "report.json").write_text("null")
+
+    with pytest.raises(ValueError, match="not a report"):
+        load_report(tmp_path)
+
+
 def test_load_report_says_which_file_is_missing(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="No report at"):
         load_report(tmp_path / "nowhere")

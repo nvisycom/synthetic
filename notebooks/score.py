@@ -92,7 +92,7 @@ def _(load_details, load_report, mo, session):
             This run has no report. Write one:
 
             ```bash
-            synthetic score --corpus ./corpus --run {session.run_dir} --report ./report
+            synthetic score --corpus ./corpus --run {session.run_path} --report ./report
             ```
             ///
             """

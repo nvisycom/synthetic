@@ -110,6 +110,16 @@ def test_open_session_finds_a_report_at_the_root(tmp_path: Path) -> None:
     assert open_session(run_dir, tmp_path).report_dir == tmp_path / "report"
 
 
+def test_run_path_is_relative_to_the_repository(tmp_path: Path) -> None:
+    # A notebook's output is committed as an export, so an absolute path here
+    # would put the author's home directory in the repository and hand everyone
+    # else a command they cannot paste.
+    digest = _corpus(tmp_path)
+    run_dir = _run(tmp_path, "42-aaa", digest)
+
+    assert open_session(run_dir, tmp_path).run_path == "./runs/42-aaa"
+
+
 def test_open_session_ignores_a_report_for_another_run(tmp_path: Path) -> None:
     # The root report belongs to whichever run was scored last. Showing one
     # run's identity above another run's numbers is the mistake the digest
@@ -123,6 +133,18 @@ def test_open_session_ignores_a_report_for_another_run(tmp_path: Path) -> None:
     session = open_session(run_dir, tmp_path)
     assert session.report_dir is None
     assert "run `synthetic score`" in summary_table(session)
+
+
+def test_open_session_ignores_a_report_that_is_not_an_object(tmp_path: Path) -> None:
+    # `null`, a list, and a bare string all parse cleanly and then have no
+    # `runId` to ask for. Valid JSON is not the same as a report.
+    digest = _corpus(tmp_path)
+    run_dir = _run(tmp_path, "42-aaa", digest)
+    (tmp_path / "report").mkdir()
+
+    for content in ("null", "[]", '"a string"', "42"):
+        (tmp_path / "report" / "report.json").write_text(content)
+        assert open_session(run_dir, tmp_path).report_dir is None, content
 
 
 def test_open_session_ignores_an_unreadable_report(tmp_path: Path) -> None:
