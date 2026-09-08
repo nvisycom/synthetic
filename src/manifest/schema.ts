@@ -21,6 +21,7 @@ import type { Label } from "#/datatypes/label.ts";
 import { isLabel } from "#/datatypes/label.ts";
 import type { Range } from "#/datatypes/location.ts";
 import { DOCUMENT_FORMATS, MODALITY_KINDS } from "#/datatypes/record.ts";
+import { HarnessError } from "#/error.ts";
 
 /** A non-negative integer, as every offset and dimension here must be. */
 const offset = z.number().int().nonnegative();
@@ -37,6 +38,28 @@ const identifier = z
 	.refine((value) => value === value.trim(), {
 		message: "Identifier must not have leading or trailing whitespace",
 	});
+
+/**
+ * An identifier that also names a file or directory.
+ *
+ * A record's id becomes a path segment three times over — its directory in a
+ * corpus, its outcome in a run, its detail in a report — so anything a path
+ * separator or a `..` could reach is refused here rather than sanitised at each
+ * of those sites. A corpus is a file someone hands you, and one carrying
+ * `../../escaped` as a record id would otherwise write outside the directory
+ * the caller named.
+ *
+ * Deliberately narrow: the generator emits `rec_0001`, and a benchmark has no
+ * use for an identifier that a filesystem would find interesting.
+ */
+export const pathSafeIdentifier = identifier.refine(
+	(value) =>
+		/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value) && !value.includes(".."),
+	{
+		message:
+			"Identifier is used as a filename, so it must start alphanumeric and hold only letters, digits, dot, dash, or underscore",
+	},
+);
 
 /**
  * A half-open range.
@@ -58,9 +81,6 @@ export const TextLocationSchema = z.strictObject({
 	ranges: z.array(RangeSchema).nonempty() as unknown as z.ZodType<
 		[Range, ...Range[]]
 	>,
-	source: (
-		z.array(RangeSchema).nonempty() as unknown as z.ZodType<[Range, ...Range[]]>
-	).optional(),
 	page: offset.optional(),
 });
 
@@ -87,10 +107,10 @@ export const TabularLocationSchema = z.strictObject({
 	column: offset,
 	columnName: z.string().min(1).optional(),
 	sheetName: z.string().min(1).optional(),
-	range: RangeSchema.optional(),
-	source: (
+	ranges: (
 		z.array(RangeSchema).nonempty() as unknown as z.ZodType<[Range, ...Range[]]>
 	).optional(),
+	cell: RangeSchema.optional(),
 });
 
 export const LocationSchema = z.discriminatedUnion("kind", [
@@ -129,6 +149,7 @@ export const OccurrenceSchema = z.strictObject({
 	modalityId: identifier,
 	surface: z.enum(SURFACE_FORMS),
 	text: z.string().min(1),
+	written: z.string().min(1),
 	transcribed: z.string().optional(),
 	location: LocationSchema,
 	splitAcross: z
@@ -164,7 +185,7 @@ export const ProvenanceSchema = z.strictObject({
  * One record's entry in the corpus index.
  */
 export const RecordEntrySchema = z.strictObject({
-	id: identifier,
+	id: pathSafeIdentifier,
 	format: z.enum(DOCUMENT_FORMATS),
 	specId: identifier,
 	path: z.string().min(1),
@@ -213,7 +234,7 @@ export const ManifestSchema = z
 export const CorpusRecordSchema = z
 	.strictObject({
 		version: z.literal(1),
-		id: identifier,
+		id: pathSafeIdentifier,
 		format: z.enum(DOCUMENT_FORMATS),
 		specId: identifier,
 		artifact: z.string().min(1),
@@ -279,22 +300,8 @@ export const CorpusRecordSchema = z
 /**
  * Raised when a corpus file cannot be trusted.
  */
-export class ManifestError extends Error {
+export class ManifestError extends HarnessError {
 	override readonly name = "ManifestError";
-
-	/**
-	 * Every problem found, one line each, for logging.
-	 *
-	 * Assigned in the body rather than declared as a parameter property, which
-	 * Node's type stripping does not support — the CLI runs from source, so a
-	 * parameter property here would crash it while still passing tests.
-	 */
-	readonly issues: readonly string[];
-
-	constructor(message: string, issues: readonly string[]) {
-		super(message);
-		this.issues = issues;
-	}
 }
 
 /**
@@ -344,5 +351,24 @@ function parseWith<T extends z.ZodType>(
 export function parseRecord(
 	value: unknown,
 ): z.infer<typeof CorpusRecordSchema> {
-	return parseWith(CorpusRecordSchema, value, "Record");
+	try {
+		return parseWith(CorpusRecordSchema, value, "Record");
+	} catch (cause) {
+		// A corpus generated before occurrences recorded `written` fails on
+		// every occurrence at once, and a wall of identical field errors does
+		// not say what to do about it. A corpus is derived — reproducible from
+		// its seed and the tracked specs — so regenerating is the fix, and
+		// saying so beats leaving it to be inferred.
+		if (
+			cause instanceof ManifestError &&
+			cause.issues.every((issue) => issue.startsWith("occurrences.")) &&
+			cause.issues.some((issue) => issue.includes("written"))
+		) {
+			throw new ManifestError(
+				"This corpus predates a change to how ground truth is recorded, and cannot be scored. Regenerate it with the same seed.",
+				cause.issues,
+			);
+		}
+		throw cause;
+	}
 }

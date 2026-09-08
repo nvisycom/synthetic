@@ -10,27 +10,28 @@
  * ```
  *
  * XML gives a value more places to hide than JSON does, and they escape
- * differently. Element text and attribute values replace `&`, `<`, and `>` with
- * entities; a comment escapes nothing but may not contain `--`; and CDATA
- * escapes nothing at all, so inside it the decoded and source offsets coincide
- * while they diverge everywhere else. A pipeline that reads element text but
- * skips attributes, comments, or CDATA leaks exactly the values planted there.
+ * differently. Element text and attribute values replace `&`, `<`, `>`, and `"`
+ * with entities; a comment escapes nothing but may not contain `--`; and CDATA
+ * escapes nothing at all. A pipeline that reads element text but skips
+ * attributes, comments, or CDATA leaks exactly the values planted there.
  *
- * As with the other structured renderers, the document is written by hand
- * rather than serialized, because the mapping between decoded and source
- * offsets is only knowable while each entity is being written.
+ * The tree is written out here rather than through an XML library because the
+ * escaping is one line and the rest — where a comment sits, what goes in CDATA,
+ * which attributes are namespace declarations — is this template format's own
+ * shape, which a library would not know. Positions come from {@link Markers},
+ * as they do for every format.
  *
  * @module generator/render/xml
  */
 
 import type { Entity } from "#/datatypes/entity.ts";
-import type { Occurrence } from "#/datatypes/record.ts";
-import { byteLength } from "#/util/offset.ts";
 import {
+	type Escape,
 	hasPlaceholder,
+	Markers,
 	PLACEHOLDER,
-	resolveSlot,
 	TemplateError,
+	verbatim,
 } from "../template.ts";
 import type { Rendered } from "./index.ts";
 
@@ -56,123 +57,47 @@ interface Node {
 }
 
 /**
- * Where in a document a value sits, which decides how it is escaped.
+ * How XML writes a value in element text or an attribute.
+ *
+ * `"` is escaped in both, rather than only in attributes where it must be.
+ * Escaping it in element text is permitted, changes nothing a parser reads, and
+ * means one function describes both contexts.
+ *
+ * Comments and CDATA escape nothing and use {@link verbatim} instead.
  */
-type Context = "text" | "attribute" | "comment" | "cdata";
-
-/**
- * Accumulates the document while tracking both coordinate systems.
- */
-class Writer {
-	text = "";
-	bytes = 0;
-
-	/**
-	 * The document's readable content: element text, attribute values, comments,
-	 * and CDATA, in document order. This is the modality a detector reads, and
-	 * what occurrence `ranges` index. Markup itself is left out.
-	 */
-	decoded = "";
-	decodedBytes = 0;
-
-	readonly occurrences: Occurrence[] = [];
-
-	/** Writes markup, which no occurrence indexes. */
-	raw(fragment: string): void {
-		this.text += fragment;
-		this.bytes += byteLength(fragment);
-	}
-
-	/**
-	 * Writes one character of content, escaped for its context.
-	 */
-	character(character: string, context: Context): void {
-		if (context === "text" || context === "attribute") {
-			switch (character) {
-				case "&":
-					this.raw("&amp;");
-					break;
-				case "<":
-					this.raw("&lt;");
-					break;
-				case ">":
-					this.raw("&gt;");
-					break;
-				case '"':
-					// Only inside an attribute, which this renderer double-quotes.
-					this.raw(context === "attribute" ? "&quot;" : '"');
-					break;
-				default:
-					this.raw(character);
-			}
-		} else {
-			// Comments and CDATA carry their content verbatim.
-			this.raw(character);
-		}
-
-		this.decoded += character;
-		this.decodedBytes += byteLength(character);
-	}
+function escapeWith(value: string): string {
+	return value
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;");
 }
 
 /**
- * Writes a run of content, planting any placeholders it carries.
+ * Replaces a run of template content with markers.
  */
-function writeContent(
-	writer: Writer,
+function mark(
 	template: string,
 	entities: ReadonlyMap<string, Entity>,
-	modalityId: string,
-	context: Context,
-): void {
-	let last = 0;
+	markers: Markers,
+	escapeAt: Escape,
+): string {
 	PLACEHOLDER.lastIndex = 0;
-	let match = PLACEHOLDER.exec(template);
-
-	while (match !== null) {
-		for (const character of template.slice(last, match.index)) {
-			writer.character(character, context);
-		}
-
-		const [placeholder, name, requested] = match;
-		const resolved = resolveSlot(entities, name, requested);
-
-		const decodedStart = writer.decodedBytes;
-		const sourceStart = writer.bytes;
-		for (const character of resolved.value) {
-			writer.character(character, context);
-		}
-
-		writer.occurrences.push({
-			id: `occ_${String(writer.occurrences.length).padStart(4, "0")}`,
-			entityId: resolved.entity.id,
-			modalityId,
-			surface: resolved.surface,
-			text: resolved.value,
-			location: {
-				kind: "text",
-				ranges: [{ start: decodedStart, end: writer.decodedBytes }],
-				source: [{ start: sourceStart, end: writer.bytes }],
-			},
-		});
-
-		last = match.index + placeholder.length;
-		match = PLACEHOLDER.exec(template);
-	}
-
-	for (const character of template.slice(last)) {
-		writer.character(character, context);
-	}
+	return template.replaceAll(
+		PLACEHOLDER,
+		(_, name: string, requested?: string) =>
+			markers.place(entities, name, requested, escapeAt, undefined),
+	);
 }
 
 /**
  * Writes one element and its subtree.
  */
 function writeNode(
-	writer: Writer,
+	out: string[],
 	node: Node,
 	entities: ReadonlyMap<string, Entity>,
-	modalityId: string,
+	markers: Markers,
 	depth: number,
 ): void {
 	if (typeof node?.tag !== "string" || node.tag.length === 0) {
@@ -185,9 +110,10 @@ function writeNode(
 		if (node.comment.includes("--")) {
 			throw new TemplateError("An XML comment may not contain '--'");
 		}
-		writer.raw(`${pad}<!-- `);
-		writeContent(writer, node.comment, entities, modalityId, "comment");
-		writer.raw(" -->\n");
+		// A comment escapes nothing; the `--` check above is what keeps it legal.
+		out.push(
+			`${pad}<!-- ${mark(node.comment, entities, markers, verbatim)} -->\n`,
+		);
 	}
 
 	if (hasPlaceholder(node.tag)) {
@@ -196,7 +122,7 @@ function writeNode(
 		);
 	}
 
-	writer.raw(`${pad}<${node.tag}`);
+	out.push(`${pad}<${node.tag}`);
 
 	for (const [name, value] of Object.entries(node.attrs ?? {})) {
 		if (hasPlaceholder(name)) {
@@ -204,43 +130,47 @@ function writeNode(
 				`Attribute name ${JSON.stringify(name)} carries a placeholder; values are planted, names are not`,
 			);
 		}
-		writer.raw(` ${name}="`);
-		writeContent(writer, value, entities, modalityId, "attribute");
-		writer.raw('"');
+		// A namespace declaration is markup, not content: it holds a URI rather
+		// than anything a document is about, so nothing is planted in it. Still
+		// escaped, because a URI may legitimately carry an `&` and writing one
+		// raw produces a document no parser will accept.
+		out.push(
+			name === "xmlns" || name.startsWith("xmlns:")
+				? ` ${name}="${escapeWith(value)}"`
+				: ` ${name}="${mark(value, entities, markers, escapeWith)}"`,
+		);
 	}
 
 	const children = node.children ?? [];
 	const hasText = node.text !== undefined || node.cdata !== undefined;
 
 	if (!hasText && children.length === 0) {
-		writer.raw(" />\n");
+		out.push(" />\n");
 		return;
 	}
 
-	writer.raw(">");
+	out.push(">");
 
 	if (node.text !== undefined) {
-		writeContent(writer, node.text, entities, modalityId, "text");
+		out.push(mark(node.text, entities, markers, escapeWith));
 	}
 
 	if (node.cdata !== undefined) {
-		// Nothing inside CDATA is escaped, so a value planted here has identical
-		// decoded and source offsets — the one place in an XML document where the
-		// two coincide.
-		writer.raw("<![CDATA[");
-		writeContent(writer, node.cdata, entities, modalityId, "cdata");
-		writer.raw("]]>");
+		// Nothing inside CDATA is escaped, so a value planted here occupies
+		// exactly its own bytes — the one place in an XML document where what a
+		// parser returns and what the file holds cannot differ.
+		out.push(`<![CDATA[${mark(node.cdata, entities, markers, verbatim)}]]>`);
 	}
 
 	if (children.length > 0) {
-		writer.raw("\n");
+		out.push("\n");
 		for (const child of children) {
-			writeNode(writer, child, entities, modalityId, depth + 1);
+			writeNode(out, child, entities, markers, depth + 1);
 		}
-		writer.raw(pad);
+		out.push(pad);
 	}
 
-	writer.raw(`</${node.tag}>\n`);
+	out.push(`</${node.tag}>\n`);
 }
 
 /**
@@ -261,13 +191,9 @@ export function renderXml(
 		throw new TemplateError("An XML template must be an object");
 	}
 
-	const writer = new Writer();
-	writer.raw('<?xml version="1.0" encoding="UTF-8"?>\n');
-	writeNode(writer, template as Node, entities, modalityId, 0);
+	const markers = new Markers();
+	const out: string[] = ['<?xml version="1.0" encoding="UTF-8"?>\n'];
+	writeNode(out, template as Node, entities, markers, 0);
 
-	return {
-		text: writer.text,
-		decoded: writer.decoded,
-		occurrences: writer.occurrences,
-	};
+	return markers.resolve(out.join(""), modalityId);
 }

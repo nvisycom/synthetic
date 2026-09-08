@@ -9,6 +9,13 @@ endif
 CORPUS_DIR ?= ./corpus
 RUNS_DIR ?= ./runs
 
+# Which run `make score` grades. Defaults to the newest one, since that is
+# almost always the one just produced; pass RUN_DIR=./runs/<id> for another.
+RUN_DIR ?= $(shell ls -dt $(RUNS_DIR)/*/ 2>/dev/null | head -1)
+
+# Where `make score` writes its report, and where the notebooks look for one.
+REPORT_DIR ?= ./report
+
 # Seed and size for `make generate`. The same seed always yields the same
 # corpus, so a score is only comparable to another from this seed.
 SEED ?= 42
@@ -47,32 +54,41 @@ generate: ## Generates a corpus from data/ (SEED, RECORDS, CORPUS_DIR).
 	@$(call log,Corpus written to $(CORPUS_DIR).)
 
 # Benchmark Commands
-.PHONY: bench
-bench: ## Runs a benchmark against a local server (CONCURRENCY, CORPUS_DIR).
+.PHONY: run
+run: ## Runs a benchmark against a local server (CONCURRENCY, CORPUS_DIR).
 	@$(call log,Submitting $(CORPUS_DIR) to a local pipeline...)
-	@npm start --silent -- bench --development \
+	@npm start --silent -- run --development \
 		--corpus $(CORPUS_DIR) --out $(RUNS_DIR) --concurrency $(CONCURRENCY)
 	@$(call log,Run written to $(RUNS_DIR).)
 
-.PHONY: bench-remote
-bench-remote: ## Runs a benchmark against the hosted API (needs NVISY_API_TOKEN).
+.PHONY: score
+score: ## Scores a run against its corpus (CORPUS_DIR, RUN_DIR, REPORT_DIR).
+	@test -n "$(RUN_DIR)" || { echo "No run found under $(RUNS_DIR). Run 'make run' first, or pass RUN_DIR=."; exit 1; }
+	@$(call log,Scoring $(RUN_DIR) against $(CORPUS_DIR)...)
+	@npm start --silent -- score --corpus $(CORPUS_DIR) --run $(RUN_DIR) \
+		--report $(REPORT_DIR)
+
+.PHONY: run-remote
+run-remote: ## Runs a benchmark against the hosted API (needs NVISY_API_TOKEN).
 	@$(call log,Submitting $(CORPUS_DIR) to the hosted pipeline...)
-	@npm start --silent -- bench \
+	@npm start --silent -- run \
 		--corpus $(CORPUS_DIR) --out $(RUNS_DIR) --concurrency $(CONCURRENCY)
 	@$(call log,Run written to $(RUNS_DIR).)
 
 # Notebook Commands
 .PHONY: explore
-explore: ## Opens the run explorer notebook.
-	@$(call log,Opening the explorer...)
-	@cd notebooks && uv run marimo edit explore.py
+explore: ## Opens the notebooks; marimo lists them all from one server.
+	@$(call log,Opening the notebooks...)
+	@cd notebooks && uv run marimo edit .
 
-.PHONY: explore-export
-explore-export: ## Exports the explorer to a notebook GitHub renders inline.
-	@$(call log,Executing the notebook and embedding its output...)
+.PHONY: export
+export: ## Exports the notebooks to a form GitHub renders inline.
+	@$(call log,Executing the notebooks and embedding their output...)
+	@cd notebooks && uv run marimo export ipynb score.py \
+		--include-outputs -o exports/score.ipynb
 	@cd notebooks && uv run marimo export ipynb explore.py \
-		--include-outputs -o explore.ipynb
-	@$(call log,Wrote notebooks/explore.ipynb.)
+		--include-outputs -o exports/explore.ipynb
+	@$(call log,Wrote notebooks/exports/.)
 
 # CI Commands (mirror GitHub Actions)
 .PHONY: ci
@@ -126,4 +142,4 @@ clean-output: ## Removes generated corpora and runs. Both cost time to rebuild.
 	@$(call log,Generated output removed.)
 
 .PHONY: all
-all: install generate bench
+all: install generate run

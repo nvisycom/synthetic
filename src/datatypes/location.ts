@@ -6,10 +6,13 @@
  * A conversion in the middle of scoring is a place for an off-by-one to hide,
  * and an off-by-one here silently changes every boundary-accuracy number.
  *
- * Two conventions are worth stating plainly, because both differ from the
+ * Three conventions are worth stating plainly, because each differs from the
  * obvious guess:
  *
- * - Text offsets are **byte** offsets into UTF-8, not character or UTF-16 code
+ * - Text offsets index the **raw file**, not text extracted from it. The bytes
+ *   on disk are the only coordinate system a detector, a redactor, and this
+ *   harness can all agree on without agreeing on a codec first.
+ * - Those offsets are **byte** offsets into UTF-8, not character or UTF-16 code
  *   unit offsets. A `é` advances an offset by two, an emoji by four.
  * - Audio times are **microseconds**, matching the SDK's `TimeSpan`.
  *
@@ -30,42 +33,33 @@ export interface Range {
 }
 
 /**
- * A byte range in a document's decoded text.
+ * A byte range in a document's raw bytes.
  *
- * Offsets index the UTF-8 encoding of {@link Modality.text}, matching the
- * SDK's `Range_of_uint`. Deriving them with `Buffer.byteLength` rather than
- * `String.prototype.length` is the difference between a correct span and one
- * that drifts on the first non-ASCII character.
+ * Offsets index the file on disk, matching the SDK's `DecodedSpan.source`.
+ * Deriving them with `Buffer.byteLength` rather than `String.prototype.length`
+ * is the difference between a correct span and one that drifts on the first
+ * non-ASCII character.
+ *
+ * The file is the one coordinate system every reader agrees on. A detector's
+ * own decoded offsets depend on how it extracted text — which escapes it
+ * resolved, whether it kept markup, where it inserted separators — so comparing
+ * against them means agreeing with a particular extractor, and the harness would
+ * be scoring its own codec as much as the pipeline. The bytes admit no such
+ * disagreement: a planted value either sits at those bytes or it does not.
  */
 export interface TextLocation {
 	kind: "text";
 
 	/**
-	 * The byte range covering the value.
+	 * The byte ranges covering the value in the file.
 	 *
-	 * A value broken across a layout boundary carries more than one range, in
-	 * reading order. Kept distinct rather than merged, because the gap between
-	 * them is exactly what a pipeline matching within a single line will miss,
-	 * and merging would hide the failure the case exists to expose.
+	 * More than one when the value is not contiguous on disk: an escape falling
+	 * inside it splits it, as does a layout boundary. Kept distinct rather than
+	 * merged, because the gap between them is exactly what a pipeline matching
+	 * within a single line will miss, and merging would hide the failure the case
+	 * exists to expose.
 	 */
 	ranges: [Range, ...Range[]];
-
-	/**
-	 * Where the value sits in the raw file, when that differs from the decoded
-	 * text.
-	 *
-	 * Absent when the two coincide, which is the common case: in a plain text
-	 * file the bytes on disk *are* the decoded text. A structured format changes
-	 * that. In `{"alias": "Say \"hi\" Reyes"}` the planted `Reyes` sits at
-	 * decoded offset 9 but source offset 22, the difference being the escapes.
-	 *
-	 * Both matter, for different readers: a detector reads decoded text, so
-	 * scoring compares against {@link ranges}; a redactor overwrites bytes, so
-	 * boundary accuracy against the file uses these. Mirrors the SDK's
-	 * `DecodedSpan.source`, and is a list for the same reason — an escape falling
-	 * inside a value splits it across the raw bytes.
-	 */
-	source?: [Range, ...Range[]];
 
 	/** Zero-based page index, for paged formats. */
 	page?: number;
@@ -145,25 +139,41 @@ export interface TabularLocation {
 	sheetName?: string;
 
 	/**
-	 * Byte range within the cell's own text.
+	 * The byte ranges covering the value in the file, when the format has any.
 	 *
-	 * Absent when the value is the whole cell, which is the common case: a name
-	 * in a `customer` column occupies it entirely. Present when a value sits
-	 * inside a longer cell, such as an account number in a free-text note.
+	 * Ground truth records these because the generator wrote the file and knows
+	 * exactly where the value landed, quoting included: the range starts past an
+	 * opening quote and counts any doubled quote before the value, so it covers
+	 * the bytes a redactor must overwrite rather than what the cell would parse
+	 * to.
 	 *
-	 * Offsets index the cell's decoded text, so quoting and doubled quotes do
-	 * not shift them — the same decoded-versus-source split the text formats
-	 * make, resolved by addressing the cell rather than the file.
+	 * A detection carries none. A pipeline reading a table answers in cells, and
+	 * for a workbook there are no file offsets to answer in — which is why
+	 * {@link cell} rather than this is what the two are compared on.
 	 */
-	range?: Range;
+	ranges?: [Range, ...Range[]];
 
 	/**
-	 * Where the cell's value sits in the raw file.
+	 * Where the value sits within its own cell.
 	 *
-	 * Absent when the two coincide. Present when the cell was quoted, since the
-	 * quotes and any doubled quotes shift the bytes a redactor must overwrite.
+	 * Tabular content is the one place a pipeline does not answer in file
+	 * offsets: a detection over a spreadsheet comes back naming a row, a column,
+	 * and an offset into that cell's value. Recording the same thing means
+	 * scoring compares like with like, rather than translating a cell offset into
+	 * a file offset on every comparison — which is where an off-by-one would
+	 * hide, and which is impossible for a format like `xlsx` that has no file
+	 * offsets to translate to.
+	 *
+	 * Counted in the cell's parsed value, so an opening quote and any doubling
+	 * are excluded: a value filling a quoted cell starts at 0, not 1.
+	 *
+	 * Absent when the value is the whole cell and its width is not stated — how
+	 * the API reports a detection over an entire cell. Left absent rather than
+	 * filled with a zero-width range at 0, which a scorer could not tell from a
+	 * genuine empty match at the cell's start; the cell address says which text
+	 * is meant, and the scorer widens it to that.
 	 */
-	source?: [Range, ...Range[]];
+	cell?: Range;
 }
 
 /**
@@ -195,17 +205,19 @@ export function extentOf(location: Location): number {
 				(total, range) => total + (range.end - range.start),
 				0,
 			);
+		case "tabular":
+			// The cell range, not the file one: it is the coordinate a tabular
+			// detection reports, so it is the one boundary accuracy compares. A
+			// whole-cell location states no range, and its extent is the cell —
+			// which the caller knows and this function does not.
+			return location.cell === undefined
+				? 0
+				: location.cell.end - location.cell.start;
 		case "image":
 			return (
 				(location.max.x - location.min.x) * (location.max.y - location.min.y)
 			);
 		case "audio":
 			return location.span.end - location.span.start;
-		case "tabular":
-			// A whole-cell location has no range of its own; its extent is the
-			// cell, which the caller knows and this function does not.
-			return location.range === undefined
-				? 0
-				: location.range.end - location.range.start;
 	}
 }

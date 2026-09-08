@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Entity } from "#/datatypes/entity.ts";
-import { sliceByteRange } from "#/util/offset.ts";
 import { TemplateError } from "../template.ts";
 import { renderJson } from "./json.ts";
+import { expectVerifiable as expectVerifiableIn } from "./verifiable.ts";
+
+/** Asserts the ranges, and that the document still parses as JSON. */
+function expectVerifiable(rendered: ReturnType<typeof renderJson>): void {
+	expectVerifiableIn(rendered, JSON.parse);
+}
 
 function entity(
 	id: string,
@@ -14,29 +19,6 @@ function entity(
 
 function slots(...pairs: [string, Entity][]): Map<string, Entity> {
 	return new Map(pairs);
-}
-
-/**
- * Asserts both coordinate systems: decoded ranges against the string a detector
- * reads, source ranges against the bytes on disk.
- */
-function expectVerifiable(rendered: ReturnType<typeof renderJson>): void {
-	for (const occurrence of rendered.occurrences) {
-		if (occurrence.location.kind !== "text") continue;
-
-		const decoded = occurrence.location.ranges
-			.map((range) => sliceByteRange(rendered.decoded, range))
-			.join("");
-		expect(decoded).toBe(occurrence.text);
-
-		const { source } = occurrence.location;
-		expect(source).toBeDefined();
-		const raw = (source ?? [])
-			.map((range) => sliceByteRange(rendered.text, range))
-			.join("");
-		// The file holds the escaped form, so unescape before comparing.
-		expect(JSON.parse(`"${raw}"`)).toBe(occurrence.text);
-	}
 }
 
 describe("renderJson", () => {
@@ -59,10 +41,11 @@ describe("renderJson", () => {
 		expectVerifiable(rendered);
 	});
 
-	it("shifts source offsets past an escape, leaving decoded ones alone", () => {
-		// The case the whole dual-coordinate model exists for: the escaped quotes
-		// push later values further into the file without moving them in the
-		// decoded string.
+	it("covers the escaped bytes, not the value's own width", () => {
+		// The case that decides what a range means. `Say "Ace" Delgado` is 17
+		// characters but reaches disk as 21 bytes, the two quotes having become
+		// `\"`. A redactor overwriting 17 leaves a stray quote behind, so the range
+		// has to be the wider one.
 		const rendered = renderJson(
 			{ alias: "{{alias}}", note: "About {{who}}." },
 			slots(
@@ -73,10 +56,25 @@ describe("renderJson", () => {
 		);
 
 		expectVerifiable(rendered);
-		const who = rendered.occurrences[1]?.location;
-		if (who?.kind !== "text") throw new Error("expected a text location");
-		// Two escaped quotes cost two extra bytes each in the file.
-		expect(who.source?.[0]?.start).toBeGreaterThan(who.ranges[0]?.start ?? 0);
+
+		const alias = rendered.occurrences[0];
+		if (alias?.location.kind !== "text") {
+			throw new Error("expected a text location");
+		}
+		expect(alias.text).toBe('Say "Ace" Delgado');
+		expect(alias.written).toBe('Say \\"Ace\\" Delgado');
+
+		const [range] = alias.location.ranges;
+		expect(range.end - range.start).toBe(alias.written.length);
+		expect(range.end - range.start).toBe(alias.text.length + 2);
+
+		// And the value after it is placed past those extra bytes, rather than
+		// where an unescaped document would have put it.
+		const who = rendered.occurrences[1];
+		if (who?.location.kind !== "text") {
+			throw new Error("expected a text location");
+		}
+		expect(who.location.ranges[0].start).toBeGreaterThan(range.end);
 	});
 
 	it("escapes a value containing quotes and backslashes", () => {

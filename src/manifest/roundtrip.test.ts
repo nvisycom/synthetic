@@ -73,6 +73,7 @@ function record(digest: string): CorpusRecord {
 				modalityId: "mod_1",
 				surface: "canonical",
 				text: "Dana Reyes",
+				written: "Dana Reyes",
 				location: { kind: "text", ranges: [{ start: 0, end: 10 }] },
 			},
 		],

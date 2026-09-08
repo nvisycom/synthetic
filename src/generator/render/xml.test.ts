@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Entity } from "#/datatypes/entity.ts";
-import { sliceByteRange } from "#/util/offset.ts";
 import { TemplateError } from "../template.ts";
+import { expectVerifiable } from "./verifiable.ts";
 import { renderXml } from "./xml.ts";
 
 function entity(id: string, value: string): Entity {
@@ -10,32 +10,6 @@ function entity(id: string, value: string): Entity {
 
 function slots(...pairs: [string, Entity][]): Map<string, Entity> {
 	return new Map(pairs);
-}
-
-/** Resolves the entities an XML document escapes with. */
-function resolveEntities(fragment: string): string {
-	return fragment
-		.replaceAll("&lt;", "<")
-		.replaceAll("&gt;", ">")
-		.replaceAll("&quot;", '"')
-		.replaceAll("&amp;", "&");
-}
-
-/** Asserts both coordinate systems against the rendered document. */
-function expectVerifiable(rendered: ReturnType<typeof renderXml>): void {
-	for (const occurrence of rendered.occurrences) {
-		if (occurrence.location.kind !== "text") continue;
-
-		const decoded = occurrence.location.ranges
-			.map((range) => sliceByteRange(rendered.decoded, range))
-			.join("");
-		expect(decoded).toBe(occurrence.text);
-
-		const raw = (occurrence.location.source ?? [])
-			.map((range) => sliceByteRange(rendered.text, range))
-			.join("");
-		expect(resolveEntities(raw)).toBe(occurrence.text);
-	}
 }
 
 describe("renderXml", () => {
@@ -86,24 +60,27 @@ describe("renderXml", () => {
 		expectVerifiable(rendered);
 	});
 
-	it("leaves decoded and source offsets equal inside CDATA", () => {
-		// The one place in an XML document where the two coincide, because CDATA
-		// escapes nothing.
+	it("writes a value verbatim inside CDATA", () => {
+		// CDATA escapes nothing, so a value planted there occupies exactly its own
+		// bytes — the one context where the range and the value have equal width.
 		const rendered = renderXml(
 			{ tag: "d", cdata: "{{who}}" },
 			slots(["who", entity("ent_1", "A & B <C>")]),
 			"mod_1",
 		);
-		const location = rendered.occurrences[0]?.location;
-		if (location?.kind !== "text") throw new Error("expected text");
-		const raw = (location.source ?? [])
-			.map((range) => sliceByteRange(rendered.text, range))
-			.join("");
-		// Written verbatim, entities and all.
-		expect(raw).toBe("A & B <C>");
-	});
 
-	it("escapes entities in element text and shifts the source offsets", () => {
+		expectVerifiable(rendered);
+
+		const occurrence = rendered.occurrences[0];
+		if (occurrence?.location.kind !== "text") {
+			throw new Error("expected text");
+		}
+		// Entities and all, unescaped.
+		expect(occurrence.written).toBe("A & B <C>");
+		expect(occurrence.written).toBe(occurrence.text);
+		expect(rendered.text).toContain("<![CDATA[A & B <C>]]>");
+	});
+	it("covers the escaped bytes in element text", () => {
 		const rendered = renderXml(
 			{
 				tag: "root",
@@ -122,15 +99,21 @@ describe("renderXml", () => {
 		expect(rendered.text).toContain("Wright &amp; Sons &lt;Holdings&gt;");
 		expectVerifiable(rendered);
 
-		// The entities cost extra bytes, so the value after them sits further into
-		// the file than into the decoded text.
-		const after = rendered.occurrences[1]?.location;
-		if (after?.kind !== "text") throw new Error("expected text");
-		expect(after.source?.[0]?.start).toBeGreaterThan(
-			after.ranges[0]?.start ?? 0,
-		);
-	});
+		const org = rendered.occurrences[0];
+		if (org?.location.kind !== "text") throw new Error("expected text");
+		expect(org.text).toBe("Wright & Sons <Holdings>");
+		expect(org.written).toBe("Wright &amp; Sons &lt;Holdings&gt;");
 
+		// The range is the escaped width, which is what a redactor overwrites.
+		const [range] = org.location.ranges;
+		expect(range.end - range.start).toBe(org.written.length);
+		expect(range.end - range.start).toBeGreaterThan(org.text.length);
+
+		// And the next value sits past those extra bytes.
+		const who = rendered.occurrences[1];
+		if (who?.location.kind !== "text") throw new Error("expected text");
+		expect(who.location.ranges[0].start).toBeGreaterThan(range.end);
+	});
 	it("escapes a quote inside an attribute", () => {
 		const rendered = renderXml(
 			{ tag: "p", attrs: { alias: "{{who}}" } },
@@ -169,6 +152,31 @@ describe("renderXml", () => {
 		expectVerifiable(rendered);
 	});
 
+	it("plants nothing in a namespace declaration", () => {
+		// A URI is markup rather than content: it holds nothing a document is
+		// about, so no value is planted in one and no range covers it.
+		const rendered = renderXml(
+			{
+				tag: "ns:d",
+				attrs: { "xmlns:ns": "urn:example:directory", id: "{{who}}" },
+				children: [{ tag: "c", text: "{{who}}" }],
+			},
+			slots(["who", entity("ent_1", "Dana")]),
+			"mod_1",
+		);
+
+		expect(rendered.text).toContain('xmlns:ns="urn:example:directory"');
+		expectVerifiable(rendered);
+
+		// One occurrence for the ordinary attribute, one for the element text --
+		// and none for the namespace.
+		expect(rendered.occurrences).toHaveLength(2);
+		for (const occurrence of rendered.occurrences) {
+			if (occurrence.location.kind !== "text") throw new Error("expected text");
+			const [range] = occurrence.location.ranges;
+			expect(rendered.text.slice(range.start, range.end)).toBe("Dana");
+		}
+	});
 	it("recurses into children", () => {
 		const rendered = renderXml(
 			{

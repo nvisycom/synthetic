@@ -26,10 +26,9 @@ The approach is described in
 [Benchmarking on synthetic documents](https://nvisy.com/blog/benchmarking-on-synthetic-documents).
 
 > [!WARNING]
-> **Scoring is not implemented.** A corpus can be generated and submitted to a
-> pipeline, and the result explored, but the metrics themselves — recall,
-> precision, boundary accuracy — are still to come. Only text-bearing formats
-> render; PDF, images, and audio are not started.
+> **Only text-bearing formats render.** `txt`, `json`, `csv`, and `xml` are
+> generated, submitted, and scored end to end; PDF, images, and audio are not
+> started, and the image and audio coordinate systems are defined but unused.
 
 ## Features
 
@@ -64,16 +63,18 @@ artifact actually produced.
 
 ## Layout
 
-| Path      | Holds                                                   | Tracked |
-| --------- | ------------------------------------------------------- | ------- |
-| `data/`   | Record specifications and curated adversarial cases     | Yes     |
-| `corpus/` | Rendered documents and their ground-truth manifest      | No      |
-| `runs/`   | Redaction output and scored reports                     | No      |
+| Path      | Holds                                               | Tracked |
+| --------- | --------------------------------------------------- | ------- |
+| `data/`   | Record specifications and curated adversarial cases | Yes     |
+| `corpus/` | Rendered documents and their ground-truth manifest  | No      |
+| `runs/`   | What a pipeline reported, one file per record       | No      |
+| `report/` | What the scorer concluded about a run               | No      |
 
-Only `data/` is source. A corpus is reproducible from it plus a seed, and a
-run from a corpus, so neither is committed — rendered scans and audio reach
-gigabytes. That split is also what pins a benchmark: a score is only
-comparable across runs if the specifications and seed that produced it are.
+Only `data/` is source. A corpus is reproducible from it plus a seed, a run
+from a corpus, and a report from the two, so none is committed — rendered scans
+and audio reach gigabytes. That split is also what pins a benchmark: a score is
+only comparable across runs if the specifications and seed that produced it
+are.
 
 ## Requirements
 
@@ -90,24 +91,72 @@ Build a corpus from the tracked specifications, then submit it to a pipeline:
 
 ```bash
 synthetic generate --seed 42 --out ./corpus
-synthetic bench --corpus ./corpus --out ./runs
+synthetic run --corpus ./corpus --out ./runs
 ```
 
 The seed is required rather than defaulted, because a score is only meaningful
 alongside the corpus that produced it, and `--seed 42` is the whole record of
-which corpus that was. `bench` takes no seed: it reads the corpus it is given
-and records that corpus' digest, so a run can only ever be compared against
-what it actually ran on.
+which corpus that was. `run` takes no seed: it reads the corpus it is given and
+records that corpus' digest, so a run can only ever be compared against what it
+actually ran on.
 
-`bench` provisions its own workspace, policy, and pipeline and deletes them
+`run` provisions its own workspace, policy, and pipeline and deletes them
 afterwards, so a run cannot inherit configuration from a previous one. It uses
 `NVISY_API_TOKEN` when set, and otherwise signs up for a throwaway account.
 Add `--development` to run against a local server.
 
-`score` is declared but not implemented.
+It scores what came back and prints the result. Pass `--report ./report` to
+write the full report, or `--no-score` to collect detections without grading
+them.
 
-Every target has a `make` equivalent — `make generate`, `make bench`,
-`make explore` — and `make help` lists them.
+## Scoring
+
+`score` grades a run that already exists:
+
+```bash
+synthetic score --corpus ./corpus --run ./runs/42-abc123 --report ./report
+```
+
+`--report` names a directory, laid out the way a corpus and a run are: a
+summary in `report.json` beside a `records/` directory holding what became of
+each planted value. The summary is bounded — its breakdowns are keyed by label,
+format, and surface form — so it stays a few kilobytes whether twelve records
+were scored or a hundred thousand, while the detail that grows with the corpus
+stays out of the way until something needs looking at.
+
+Separate from `run` because the two cost very different things. A run costs a
+network round trip per record; scoring costs nothing, so a change to how
+matching works re-grades an existing run in milliseconds rather than
+resubmitting it. A run records its corpus' digest, and `score` refuses a pair
+that does not match — numbers from a mismatched pair look entirely ordinary and
+mean nothing.
+
+The report breaks recall down by label, format, surface form, and adversarial
+kind, because a single number hides the failures worth catching. A value found
+under the wrong label is reported as its own outcome rather than as a miss: a
+redactor still removes it, so nothing leaks, but the taxonomy was wrong.
+Alongside recall it reports what happened to the values planted to be *ignored*,
+without which a pipeline that redacts everything would score perfectly.
+
+## Notebooks
+
+Two marimo notebooks read what the harness writes:
+
+```bash
+make explore
+```
+
+`score.py` shows what the scorer concluded — recall by label, format, surface
+form, and adversarial kind, the values that leaked, and where a redaction would
+have clipped one. `explore.py` shows the two sides unmatched, for the questions
+that come before scoring: what a spec plants, and what a pipeline returned.
+
+One server lists both. Loading lives in `notebooks/reader/`, a plain package
+rather than notebook cells, so it is imported, tested, and type-checked like
+anything else. `notebooks/exports/` holds executed copies GitHub renders inline.
+
+Every target has a `make` equivalent — `make generate`, `make run`, `make
+score`, `make explore` — and `make help` lists them.
 
 ## Project
 

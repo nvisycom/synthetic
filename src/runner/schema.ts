@@ -16,7 +16,8 @@
  */
 
 import { z } from "zod";
-import { LocationSchema } from "#/manifest/schema.ts";
+import { HarnessError } from "#/error.ts";
+import { LocationSchema, pathSafeIdentifier } from "#/manifest/schema.ts";
 
 /** A non-negative integer. */
 const count = z.number().int().nonnegative();
@@ -42,14 +43,14 @@ export const DetectedSchema = z.strictObject({
 export const RecordOutcomeSchema = z.discriminatedUnion("status", [
 	z.strictObject({
 		status: z.literal("detected"),
-		recordId: identifier,
+		recordId: pathSafeIdentifier,
 		detectionId: identifier,
 		detected: z.array(DetectedSchema),
 		durationMs: count,
 	}),
 	z.strictObject({
 		status: z.literal("failed"),
-		recordId: identifier,
+		recordId: pathSafeIdentifier,
 		stage: z.enum(["upload", "detect", "await", "read"]),
 		message: z.string().min(1),
 		detectionId: identifier.optional(),
@@ -71,7 +72,7 @@ export const RunSchema = z
 		finishedAt: z.iso.datetime(),
 		records: z.array(
 			z.strictObject({
-				recordId: identifier,
+				recordId: pathSafeIdentifier,
 				path: z.string().min(1),
 				status: z.enum(["detected", "failed"]),
 			}),
@@ -102,16 +103,8 @@ export const RunSchema = z
 /**
  * Raised when a run file cannot be trusted.
  */
-export class RunError extends Error {
+export class RunError extends HarnessError {
 	override readonly name = "RunError";
-
-	/** Every problem found, one line each. */
-	readonly issues: readonly string[];
-
-	constructor(message: string, issues: readonly string[]) {
-		super(message);
-		this.issues = issues;
-	}
 }
 
 /**

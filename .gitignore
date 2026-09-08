@@ -22,12 +22,14 @@ dist/
 build/
 output/
 
-# Rendered corpora and benchmark runs. Both are derived: a corpus is
-# reproducible from the tracked specifications in data/ plus a seed, and a
-# run from a corpus. Rendered scans and audio reach gigabytes, so neither
-# belongs in git.
+# Rendered corpora, benchmark runs, and the reports scored from them. All
+# three are derived: a corpus is reproducible from the tracked specifications
+# in data/ plus a seed, a run from a corpus, and a report from the two. They
+# also grow with the corpus — rendered scans and audio reach gigabytes, and a
+# report carries a row per planted value — so none belongs in git.
 corpus/
 runs/
+report/
 
 # Generation writes here and renames it into place, so a failure cannot leave a
 # manifest from one run beside records from another. It should never survive a

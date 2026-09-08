@@ -2,18 +2,24 @@
 /**
  * @fileoverview CLI entrypoint for the synthetic benchmark harness.
  *
- * Three commands cover the benchmark's lifecycle: `generate` builds a corpus,
- * `score` grades redaction output against it, and `bench` runs both against a
- * live pipeline. They are separate rather than one flow because a corpus is
- * expensive to build and worth reusing across many scoring runs, and because
- * scoring must be repeatable against a fixed corpus for a regression to mean
- * anything.
+ * Three commands cover the benchmark's lifecycle. `generate` builds a corpus,
+ * `run` submits one to a live pipeline and grades what came back, and `score`
+ * grades a run that already exists.
+ *
+ * `run` is the usual entry point, and the other two are the halves it is made
+ * of. They stay separable because they cost very different things: a corpus is
+ * expensive to build and worth reusing across many runs, a run costs a network
+ * round trip per record, and scoring costs nothing — so a change to how
+ * matching works re-grades an existing run in milliseconds rather than
+ * resubmitting it. A run is pinned to its corpus by digest, so the two can only
+ * be paired back up with the corpus that produced them.
  *
  * @module main
  */
 
 import { defineCommand, runMain } from "citty";
 import { description, version } from "./config.ts";
+import { HarnessError } from "./error.ts";
 import { configureLogger } from "./logger.ts";
 
 const generate = defineCommand({
@@ -56,7 +62,7 @@ const generate = defineCommand({
 const score = defineCommand({
 	meta: {
 		name: "score",
-		description: "Score redaction output against a corpus' ground truth",
+		description: "Score a benchmark run against a corpus' ground truth",
 	},
 	args: {
 		corpus: {
@@ -65,26 +71,30 @@ const score = defineCommand({
 			default: "./corpus",
 			alias: "c",
 		},
-		output: {
+		run: {
 			type: "string",
-			description: "Directory of redaction output to grade",
+			description: "Run directory holding what the pipeline reported",
 			required: true,
+			alias: "r",
 		},
 		report: {
 			type: "string",
-			description: "Where to write the report; omit to print to stdout",
+			description:
+				"Directory to write the report into; omit to print the summary only",
 		},
 	},
 	async run({ args }) {
 		const { runScore } = await import("./scoring/score.ts");
-		await guard(() => runScore(args));
+		await guard(async () => {
+			await runScore(args);
+		});
 	},
 });
 
-const bench = defineCommand({
+const run = defineCommand({
 	meta: {
-		name: "bench",
-		description: "Run a corpus through a pipeline and score the result",
+		name: "run",
+		description: "Submit a corpus to a pipeline and score what comes back",
 	},
 	args: {
 		corpus: {
@@ -121,11 +131,21 @@ const bench = defineCommand({
 			description: "Give up on a detection after this many seconds",
 			default: "120",
 		},
+		score: {
+			type: "boolean",
+			description:
+				"Score the run once it is written; --no-score submits without grading",
+			default: true,
+		},
+		report: {
+			type: "string",
+			description: "Directory to write the report into, when scoring",
+		},
 	},
 	async run({ args }) {
-		const { runBench } = await import("./runner/bench.ts");
+		const { executeRun } = await import("./runner/run.ts");
 		await guard(() =>
-			runBench({
+			executeRun({
 				corpus: args.corpus,
 				out: args.out,
 				// An explicit URL wins; otherwise --development picks the local
@@ -142,6 +162,8 @@ const bench = defineCommand({
 					: {}),
 				concurrency: positiveInteger(args.concurrency, "--concurrency"),
 				timeoutMs: positiveInteger(args.timeout, "--timeout") * 1000,
+				score: args.score,
+				...(args.report !== undefined ? { report: args.report } : {}),
 			}),
 		);
 	},
@@ -178,7 +200,7 @@ const main = defineCommand({
 			json: args.json,
 		});
 	},
-	subCommands: { generate, score, bench },
+	subCommands: { generate, run, score },
 });
 
 /**
@@ -201,11 +223,9 @@ function positiveInteger(value: string, flag: string): number {
 		// Thrown rather than exited: the guard below prints it as a message and
 		// sets the exit code, and `process.exit` can terminate before a pending
 		// write to a pipe has flushed.
-		const error = new Error(
+		throw new HarnessError(
 			`${flag} must be a positive whole number, got ${JSON.stringify(value)}`,
 		);
-		error.name = "BenchError";
-		throw error;
 	}
 	return parsed;
 }
@@ -215,23 +235,6 @@ const PRODUCTION_URL = "https://api.nvisy.com";
 
 /** A locally running server, as `--development` selects. */
 const DEVELOPMENT_URL = "http://127.0.0.1:8080";
-
-/**
- * Errors the harness raises deliberately, as opposed to ones that mean a bug.
- *
- * A missing token or an unusable spec is a message to act on, so it is printed
- * as one. A stack trace there buries the sentence that matters under frames the
- * caller cannot do anything about — while a genuine fault still prints in full,
- * because there the frames are the useful part.
- */
-const EXPECTED = new Set([
-	"BenchError",
-	"GeneratorError",
-	"ManifestError",
-	"RunError",
-	"SpecError",
-	"TemplateError",
-]);
 
 /**
  * Runs a command, reporting a deliberate failure as a message.
@@ -245,13 +248,15 @@ async function guard(work: () => Promise<void>): Promise<void> {
 	try {
 		await work();
 	} catch (cause) {
-		const error = cause as Error & { issues?: readonly string[] };
-		if (!EXPECTED.has(error.name)) throw cause;
+		// Asked of the type rather than of a list of names, so an error added
+		// later is reported correctly by virtue of extending the base — there is
+		// nothing here to keep in step with it.
+		if (!(cause instanceof HarnessError)) throw cause;
 
 		// A message to act on, not a fault: print the sentence that matters and
 		// leave out frames the caller can do nothing about.
-		process.stderr.write(`${error.message}\n`);
-		for (const issue of error.issues ?? []) {
+		process.stderr.write(`${cause.message}\n`);
+		for (const issue of cause.issues) {
 			process.stderr.write(`  - ${issue}\n`);
 		}
 		process.exitCode = 1;

@@ -12,11 +12,8 @@
 
 import { createHash } from "node:crypto";
 import type { Entity, SurfaceForm } from "#/datatypes/entity.ts";
-import type {
-	CorpusRecord,
-	DocumentFormat,
-	Occurrence,
-} from "#/datatypes/record.ts";
+import type { CorpusRecord, Occurrence } from "#/datatypes/record.ts";
+import { HarnessError } from "#/error.ts";
 import type { Random } from "#/random.ts";
 import { sliceByteRange } from "#/util/offset.ts";
 import { fabricate, isFabricable, seedFaker } from "./fabricate.ts";
@@ -31,7 +28,7 @@ const BODY = "mod_body";
 /**
  * Raised when a record could not be generated, or could not be trusted.
  */
-export class GeneratorError extends Error {
+export class GeneratorError extends HarnessError {
 	override readonly name = "GeneratorError";
 }
 
@@ -101,22 +98,35 @@ export function validateSpec(loaded: LoadedSpec): void {
  * does not throw on its own; it shifts a span, and every boundary number
  * computed from it is quietly wrong.
  *
+ * The comparison is against the artifact's bytes, which is the only thing that
+ * can be checked without reimplementing the format. A value written into a JSON
+ * string or an XML attribute is escaped on the way in, so the bytes carry its
+ * escaped form and the planted value is compared to that — not to a decoded
+ * fragment this file would have to produce by unescaping, which would only test
+ * whether two of the harness' own routines agree.
+ *
  * @throws {GeneratorError} On the first occurrence that does not match
  */
 export function verifyOccurrences(
-	text: string,
+	rendered: string,
 	occurrences: readonly Occurrence[],
 ): void {
 	for (const occurrence of occurrences) {
-		// Tabular values are addressed by cell rather than by an offset into the
-		// document, so there is no decoded range to slice; verifySourceRanges
-		// checks them against the file instead.
-		if (occurrence.location.kind !== "text") continue;
+		const { location } = occurrence;
+		if (location.kind !== "text" && location.kind !== "tabular") continue;
+
+		// A location without file ranges places nothing that can be checked
+		// against the artifact, and the generator always records them.
+		if (location.ranges === undefined) {
+			throw new GeneratorError(
+				`Occurrence ${occurrence.id} recorded no range into the artifact`,
+			);
+		}
 
 		let found = "";
-		for (const range of occurrence.location.ranges) {
+		for (const range of location.ranges) {
 			try {
-				found += sliceByteRange(text, range);
+				found += sliceByteRange(rendered, range);
 			} catch (cause) {
 				throw new GeneratorError(
 					`Occurrence ${occurrence.id} has an unusable range [${range.start}, ${range.end}): ${(cause as Error).message}`,
@@ -124,105 +134,9 @@ export function verifyOccurrences(
 			}
 		}
 
-		if (found !== occurrence.text) {
+		if (found !== occurrence.written) {
 			throw new GeneratorError(
-				`Occurrence ${occurrence.id} claims ${JSON.stringify(occurrence.text)} but its range covers ${JSON.stringify(found)}`,
-			);
-		}
-	}
-}
-
-/**
- * Resolves whatever escaping a format applies to its content.
- */
-function unescapeFor(format: DocumentFormat, fragment: string): string {
-	switch (format) {
-		case "json":
-			return unescapeJson(fragment);
-		case "xml":
-			return unescapeXml(fragment);
-		case "csv":
-			// A quote inside a quoted cell is written twice.
-			return fragment.replaceAll('""', '"');
-		default:
-			// Plain text writes its content verbatim.
-			return fragment;
-	}
-}
-
-/**
- * Resolves XML entities in a fragment.
- */
-function unescapeXml(fragment: string): string {
-	return (
-		fragment
-			.replaceAll("&lt;", "<")
-			.replaceAll("&gt;", ">")
-			.replaceAll("&quot;", '"')
-			.replaceAll("&apos;", "'")
-			// Ampersand last, so "&amp;lt;" does not become "<".
-			.replaceAll("&amp;", "&")
-	);
-}
-
-/**
- * Resolves JSON escapes in a fragment, leaving it alone if it is not escaped.
- */
-function unescapeJson(fragment: string): string {
-	try {
-		return JSON.parse(`"${fragment}"`) as string;
-	} catch {
-		return fragment;
-	}
-}
-
-/**
- * Asserts that every source range covers its value in the rendered file.
- *
- * The decoded ranges are checked against the planted text; these check the
- * other coordinate system, against the bytes actually written. A source range
- * points at what a redactor would overwrite, so one that is off by the width of
- * an escape would silently score a correct redaction as a boundary miss.
- *
- * The slice is compared to the value *as escaped*, since that is what is
- * physically there.
- *
- * @throws {GeneratorError} On the first range that does not match
- */
-export function verifySourceRanges(
-	rendered: string,
-	occurrences: readonly Occurrence[],
-	format: DocumentFormat,
-): void {
-	for (const occurrence of occurrences) {
-		const { location } = occurrence;
-		if (location.kind !== "text" && location.kind !== "tabular") continue;
-		const { source } = location;
-		if (source === undefined) continue;
-
-		let found = "";
-		for (const range of source) {
-			try {
-				found += sliceByteRange(rendered, range);
-			} catch (cause) {
-				throw new GeneratorError(
-					`Occurrence ${occurrence.id} has an unusable source range [${range.start}, ${range.end}): ${(cause as Error).message}`,
-				);
-			}
-		}
-
-		// The rendered bytes carry the value's escaped form, so unescape before
-		// comparing rather than requiring the two to be byte-identical. JSON uses
-		// backslashes; CSV doubles a quote inside a quoted cell.
-		// Unescaped by the format that wrote it, not by whichever rule happens to
-		// match: accepting any of them would let a CSV range pass because it
-		// resolved cleanly as JSON, which is exactly the confusion this check
-		// exists to catch.
-		const unescaped = unescapeFor(format, found);
-
-		if (unescaped !== occurrence.text) {
-			throw new GeneratorError(
-				`Occurrence ${occurrence.id} claims ${JSON.stringify(occurrence.text)} but its source range covers ${JSON.stringify(found)}`,
+				`Occurrence ${occurrence.id} claims ${JSON.stringify(occurrence.written)} but its range covers ${JSON.stringify(found)}`,
 			);
 		}
 	}
@@ -294,11 +208,8 @@ export function generateRecord(
 		throw cause;
 	}
 
-	// Ground truth is verified against the artifact, not assumed from it: the
-	// decoded ranges against the text a detector reads, and the source ranges
-	// against the bytes on disk.
-	verifyOccurrences(rendered.decoded, rendered.occurrences);
-	verifySourceRanges(rendered.text, rendered.occurrences, spec.format);
+	// Ground truth is verified against the artifact, not assumed from it.
+	verifyOccurrences(rendered.text, rendered.occurrences);
 
 	const artifact = rendered.text;
 	const digest = createHash("sha256").update(artifact, "utf8").digest("hex");
@@ -314,7 +225,7 @@ export function generateRecord(
 			digest,
 			provenance: { renderer: `ts:${spec.format}`, seed },
 			modalities: [
-				{ id: BODY, kind: "text", path: "body", text: rendered.decoded },
+				{ id: BODY, kind: "text", path: "body", text: rendered.text },
 			],
 			entities,
 			occurrences: rendered.occurrences,
