@@ -10,7 +10,7 @@ over-redacted.
 
 [![Build](https://img.shields.io/github/actions/workflow/status/nvisycom/synthetic/build.yml?branch=main&label=build&style=flat-square)](https://github.com/nvisycom/synthetic/actions/workflows/build.yml)
 [![Security](https://img.shields.io/github/actions/workflow/status/nvisycom/synthetic/security.yml?branch=main&label=security&style=flat-square)](https://github.com/nvisycom/synthetic/actions/workflows/security.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE.txt)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
 [**nvisy.com**](https://nvisy.com) · [**docs.nvisy.com**](https://docs.nvisy.com)
 
@@ -161,7 +161,7 @@ score`, `make explore` — and `make help` lists them.
 ## Project
 
 - **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
-- **License**: MIT, see [LICENSE.txt](LICENSE.txt)
+- **License**: MIT, see [LICENSE](LICENSE)
 
 ## Support
 
